@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">ShortStop</string>
+    <string name="accessibility_service_description">ShortStop uses accessibility services to detect rapid app switching and help you stay focused.</string>
+</resources>

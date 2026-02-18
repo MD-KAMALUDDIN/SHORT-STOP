@@ -1,0 +1,13 @@
+R_DEF: Internal format may change without notice
+local
+color shortstop_accent
+color shortstop_background
+color shortstop_charcoal
+color shortstop_success
+drawable ic_shortstop_background
+drawable ic_shortstop_foreground
+mipmap ic_launcher
+string accessibility_service_description
+string app_name
+xml accessibility_service_config
+xml network_security_config

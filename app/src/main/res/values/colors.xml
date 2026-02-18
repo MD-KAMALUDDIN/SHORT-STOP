@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- colors.xml -->
+<resources>
+    <color name="shortstop_charcoal">#2B2F36</color>
+    <color name="shortstop_background">#FFFFFF</color>
+    <color name="shortstop_accent">#6366F1</color>
+    <color name="shortstop_success">#10B981</color>
+</resources>
