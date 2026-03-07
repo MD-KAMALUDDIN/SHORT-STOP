@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.example.shortstop.app-mergeDebugResources-2:/values-am/values-am.xml",
+            "outputFile": "com.example.shortstop.app-mergeDebugResources-49:/values-am/values-am.xml",
             "map": [
                 {
                     "source": "C:\\Users\\mdkam\\.gradle\\caches\\9.0-milestone-1\\transforms\\8a2f68389169bf8b409b8101e3799c1e\\transformed\\jetified-material3-1.1.1\\res\\values-am\\values-am.xml",
@@ -38,7 +38,7 @@
                     }
                 },
                 {
-                    "source": "C:\\Users\\mdkam\\.gradle\\caches\\9.0-milestone-1\\transforms\\3341710da4a7838e008b784abbaaf6ff\\transformed\\jetified-ui-release\\res\\values-am\\values-am.xml",
+                    "source": "C:\\Users\\mdkam\\.gradle\\caches\\9.0-milestone-1\\transforms\\514422129e56e4b991519d007086381f\\transformed\\jetified-ui-release\\res\\values-am\\values-am.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18",
                         "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",

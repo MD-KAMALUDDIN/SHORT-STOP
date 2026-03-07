@@ -12,7 +12,11 @@ import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import androidx.core.content.edit
+import com.example.shortstop.database.ShortStopRepository
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import java.net.HttpURLConnection
 import java.net.URL
 import org.json.JSONObject
@@ -20,9 +24,16 @@ import org.json.JSONObject
 class ShortStopService : AccessibilityService() {
     private var monitoringRunnable: Runnable? = null
     private var isMonitoring = false
+    private lateinit var repository: ShortStopRepository
+    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob() + CoroutineExceptionHandler { _, throwable ->
+        Log.e("ShortStop", "Coroutine error: ${throwable.message}", throwable)
+    })
     
     companion object {
         var instance: ShortStopService? = null
+        private val _isServiceRunning = MutableStateFlow(false)
+        val isServiceRunning: StateFlow<Boolean> = _isServiceRunning
+        
         private const val PREFS_NAME = "shortstop_prefs"
         private const val KEY_BLOCKED_APPS = "blocked_apps"
         private const val KEY_STUDY_APPS = "study_apps"
@@ -39,9 +50,10 @@ class ShortStopService : AccessibilityService() {
         private const val KEY_APP_DAILY_TIME_SAVED_PREFIX = "app_daily_time_saved_"
         private const val KEY_APP_DAILY_STUDY_SESSIONS_PREFIX = "app_daily_study_sessions_"
 
-        private const val FIVE_MINUTES = 15 * 1000L
-        private const val TEN_SECONDS = 10 * 1000L
-        private const val ONE_MINUTE = 60 * 1000L
+        private const val TRIGGER_THRESHOLD_MS = 7 * 1000L  // 7s - Quick interception
+        private const val OVERLAY_DURATION_MS = 30 * 1000L   // 30s - Pattern interrupt
+        private const val STUDY_MODE_DURATION_MS = 25 * 60 * 1000L  // 25min - Pomodoro standard
+        private const val COOLDOWN_PERIOD_MS = 3 * 60 * 1000L  // 3min - Anti-cheat cooldown
     }
 
     private lateinit var windowManager: WindowManager
@@ -52,6 +64,10 @@ class ShortStopService : AccessibilityService() {
     private var appStartTime = 0L
     private var accumulatedTime = 0L
     private var blurRunnable: Runnable? = null
+    private var isWaitingForExit = false
+    private var blockedAppsList = emptyList<com.example.shortstop.database.BlockedAppEntity>()
+    private var studyAppsList = emptyList<com.example.shortstop.database.BlockedAppEntity>()
+    private val appLastExitTime = mutableMapOf<String, Long>()  // Track exit times for cooldown
     private fun startMonitoring(pkg: String) {
         if (isMonitoring) return
         
@@ -67,65 +83,31 @@ class ShortStopService : AccessibilityService() {
                 val totalTime = accumulatedTime + currentSessionTime
                 Log.d("ShortStop", "Monitoring $pkg - session: ${currentSessionTime}ms, total: ${totalTime}ms")
 
-                if (totalTime >= FIVE_MINUTES && overlayView == null) {
+                if (totalTime >= TRIGGER_THRESHOLD_MS && overlayView == null) {
                     Log.d("ShortStop", "Showing overlay for $pkg (total time: ${totalTime}ms)")
                     
-                    // Update usage statistics
-                    val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-                    val currentInterventions = prefs.getInt("total_interventions", 0)
-                    val currentTimeSaved = prefs.getLong("total_time_saved", 0L)
                     val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
-                    
-                    // Update app-specific statistics
-                    val appInterventionKey = KEY_APP_INTERVENTION_COUNT_PREFIX + pkg
-                    val appTimeSavedKey = KEY_APP_TIME_SAVED_PREFIX + pkg
-                    val currentAppInterventions = prefs.getInt(appInterventionKey, 0)
-                    val currentAppTimeSaved = prefs.getLong(appTimeSavedKey, 0L)
-                    val totalPointsEarned = prefs.getInt(KEY_TOTAL_POINTS_EARNED, 0)
-                    
-                    // Daily statistics tracking
-                    val dailyInterventionKey = "daily_interventions_$today"
-                    val dailyTimeSavedKey = "daily_time_saved_$today"
-                    val appDailyInterventionKey = "${KEY_APP_DAILY_INTERVENTIONS_PREFIX}${pkg}_$today"
-                    val appDailyTimeSavedKey = "${KEY_APP_DAILY_TIME_SAVED_PREFIX}${pkg}_$today"
                     val currentHour = java.text.SimpleDateFormat("yyyy-MM-dd-HH", java.util.Locale.getDefault()).format(java.util.Date())
-                    val hourlyInterventionsKey = "hourly_interventions_$currentHour"
                     
-                    val currentDailyInterventions = prefs.getInt(dailyInterventionKey, 0)
-                    val currentDailyTimeSaved = prefs.getLong(dailyTimeSavedKey, 0L)
-                    val currentAppDailyInterventions = prefs.getInt(appDailyInterventionKey, 0)
-                    val currentAppDailyTimeSaved = prefs.getLong(appDailyTimeSavedKey, 0L)
-                    val currentHourlyInterventions = prefs.getInt(hourlyInterventionsKey, 0)
-                    
-                    prefs.edit {
-                        putInt("total_interventions", currentInterventions + 1)
-                        putLong("total_time_saved", currentTimeSaved + (10 * 1000L))
-                        putString(KEY_LAST_INTERVENTION_DATE, today) // Track intervention date
-                        // App-specific tracking
-                        putInt(appInterventionKey, currentAppInterventions + 1)
-                        putLong(appTimeSavedKey, currentAppTimeSaved + (10 * 1000L))
-                        // Track estimated points earned from this intervention
-                        putInt(KEY_TOTAL_POINTS_EARNED, totalPointsEarned + 10) // Estimate 10 points per intervention
-                        // Daily statistics
-                        putInt(dailyInterventionKey, currentDailyInterventions + 1)
-                        putLong(dailyTimeSavedKey, currentDailyTimeSaved + (10 * 1000L))
-                        putInt(appDailyInterventionKey, currentAppDailyInterventions + 1)
-                        putLong(appDailyTimeSavedKey, currentAppDailyTimeSaved + (10 * 1000L))
-                        // Hourly intervention tracking for penalty system
-                        putInt(hourlyInterventionsKey, currentHourlyInterventions + 1)
+                    serviceScope.launch {
+                        try {
+                            repository.recordIntervention(pkg, today)
+                            repository.incrementHourlyIntervention(currentHour)
+                        } catch (e: Exception) {
+                            Log.e("ShortStop", "Failed to record intervention: ${e.message}")
+                        }
                     }
                     
-                    // Show overlay if user is in the blocked app
                     if (currentApp == pkg) {
                         showOverlay()
                     }
 
-                    // Auto-hide after 10 seconds and reset timer
+                    // Auto-hide after 30 seconds and reset timer
                     blurRunnable = Runnable {
-                        Log.d("ShortStop", "Blur completed, resetting timer")
+                        Log.d("ShortStop", "Pattern interrupt completed, resetting timer")
                         hideOverlay()
                     }
-                    handler.postDelayed(blurRunnable!!, TEN_SECONDS)
+                    handler.postDelayed(blurRunnable!!, OVERLAY_DURATION_MS)
                 }
 
                 // Continue monitoring every second
@@ -153,10 +135,19 @@ class ShortStopService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
+        _isServiceRunning.value = true
+        repository = ShortStopRepository(this)
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         Log.d("ShortStop", "Service connected - instance set")
         
-        // Force a small delay to ensure proper initialization
+        serviceScope.launch(Dispatchers.IO) {
+            repository.blockedApps.collect { apps ->
+                blockedAppsList = apps
+                studyAppsList = apps.filter { it.isStudyMode }
+                Log.d("ShortStop", "Blocked apps updated: ${apps.size} apps")
+            }
+        }
+        
         handler.postDelayed({
             Log.d("ShortStop", "Service fully initialized")
         }, 1000)
@@ -180,97 +171,109 @@ class ShortStopService : AccessibilityService() {
         
         Log.d("ShortStop", "Event: ${e.eventType} from $packageName")
 
-        // Only process window state changes for app switching
         if (e.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             return
         }
 
         val now = System.currentTimeMillis()
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        val blockedApps = prefs.getStringSet(KEY_BLOCKED_APPS, emptySet()) ?: emptySet()
-        val studyApps = prefs.getStringSet(KEY_STUDY_APPS, emptySet()) ?: emptySet()
+        
+        val blockedApps = blockedAppsList.map { it.packageName }.toSet()
+        val studyApps = studyAppsList.map { it.packageName }.toSet()
         
         Log.d("ShortStop", "Blocked apps: $blockedApps")
         Log.d("ShortStop", "Study apps: $studyApps")
         Log.d("ShortStop", "Current package: $packageName")
-        
-        // Ignore system packages but allow YouTube variants
-        if (packageName.startsWith("com.android.") && 
-            !packageName.contains("youtube") ||
-            packageName == this.packageName ||
-            packageName == "android") {
-            return
-        }
-
-        // App switched
-        if (packageName != currentApp) {
-            Log.d("ShortStop", "App switched from '$currentApp' to '$packageName'")
             
-            // Clean up previous monitoring and reset everything
-            stopMonitoring()
-            hideOverlay()
-            cancelTimers()
-
-            // Save exit time for previous app
-            if (currentApp != null && blockedApps.contains(currentApp)) {
-                prefs.edit {
-                    putLong(KEY_LAST_EXIT_TIME_PREFIX + currentApp!!, now)
-                }
+            if (packageName.startsWith("com.android.") && 
+                !packageName.contains("youtube") ||
+                packageName == this@ShortStopService.packageName ||
+                packageName == "android") {
+                return
             }
 
-            // Reset accumulated time when switching apps
             if (packageName != currentApp) {
-                if (blockedApps.contains(packageName)) {
-                    // Reset timer when switching to blocked app
-                    accumulatedTime = 0L
-                } else {
-                    // Reset when switching to non-blocked app
-                    accumulatedTime = 0L
-                }
-            }
-
-            // Set new current app
-            currentApp = packageName
-            appStartTime = now
-
-            // Start monitoring if new app is blocked
-            if (blockedApps.contains(packageName)) {
+                Log.d("ShortStop", "App switched from '$currentApp' to '$packageName'")
                 
-                // Check if this is a study app with free time remaining
-                if (studyApps.contains(packageName)) {
-                    val studyStartTimeKey = KEY_STUDY_START_TIME_PREFIX + packageName
-                    val studyStartTime = prefs.getLong(studyStartTimeKey, 0L)
-                    val currentTime = System.currentTimeMillis()
+                stopMonitoring()
+                hideOverlay()
+                cancelTimers()
+
+                if (currentApp != null && blockedApps.contains(currentApp)) {
+                    appLastExitTime[currentApp!!] = now
+                    Log.d("ShortStop", "Recorded exit time for $currentApp - 3min cooldown starts")
                     
-                    if (studyStartTime > 0 && (currentTime - studyStartTime) < ONE_MINUTE) {
-                        val remainingTime = ONE_MINUTE - (currentTime - studyStartTime)
-                        Log.d("ShortStop", "📚 Study app $packageName has ${remainingTime/1000} seconds of free time remaining")
-                        
-                        // Schedule intervention to show immediately when free time expires
-                        handler.postDelayed({
-                            if (currentApp == packageName && blockedApps.contains(packageName)) {
-                                Log.d("ShortStop", "📚 Study time expired for $packageName, showing intervention")
-                                showOverlay()
-                                // Auto-hide after 10 seconds and start normal monitoring
-                                handler.postDelayed({
-                                    hideOverlay()
-                                    startMonitoring(packageName)
-                                }, TEN_SECONDS)
-                            }
-                        }, remainingTime)
-                        
-                        return // Skip monitoring during free time
+                    serviceScope.launch {
+                        repository.updateLastExitTime(currentApp!!, now)
+                    }
+                    
+                    handler.postDelayed({
+                        serviceScope.launch {
+                            checkAndRewardCleanExit(currentApp!!, prefs)
+                        }
+                    }, 10 * 60 * 1000L)
+                }
+
+                if (!blockedApps.contains(packageName)) {
+                    Log.d("ShortStop", "Switching to non-blocked app, resetting accumulated time")
+                    accumulatedTime = 0L
+                    isWaitingForExit = false
+                } else {
+                    val lastExit = appLastExitTime[packageName] ?: 0L
+                    val timeSinceExit = now - lastExit
+                    
+                    if (timeSinceExit < COOLDOWN_PERIOD_MS) {
+                        Log.d("ShortStop", "Re-entry within 3min cooldown! Showing overlay instantly")
+                        accumulatedTime = TRIGGER_THRESHOLD_MS
                     } else {
-                        Log.d("ShortStop", "📚 Study app $packageName free time expired, now monitoring")
+                        Log.d("ShortStop", "Cooldown expired, resetting timer")
+                        accumulatedTime = 0L
                     }
                 }
-                
-                Log.d("ShortStop", "✅ Starting monitoring for blocked app: $packageName")
-                startMonitoring(packageName)
-            } else {
-                Log.d("ShortStop", "❌ App $packageName is not blocked")
+
+                currentApp = packageName
+                appStartTime = now
+
+                if (blockedApps.contains(packageName)) {
+                    
+                    if (studyApps.contains(packageName)) {
+                        val studyApp = studyAppsList.find { it.packageName == packageName }
+                        val studyStartTime = studyApp?.studyStartTime ?: 0L
+                        val currentTime = System.currentTimeMillis()
+                        
+                        if (studyStartTime > 0 && (currentTime - studyStartTime) < STUDY_MODE_DURATION_MS) {
+                            val remainingTime = STUDY_MODE_DURATION_MS - (currentTime - studyStartTime)
+                            Log.d("ShortStop", "📚 Study app $packageName has ${remainingTime/1000} seconds of free time remaining")
+                            
+                            handler.postDelayed({
+                                if (currentApp == packageName && blockedApps.contains(packageName)) {
+                                    Log.d("ShortStop", "📚 Study time expired for $packageName, showing intervention")
+                                    serviceScope.launch {
+                                        repository.clearStudyMode(packageName)
+                                    }
+                                    showOverlay()
+                                    handler.postDelayed({
+                                        hideOverlay()
+                                        startMonitoring(packageName)
+                                    }, OVERLAY_DURATION_MS)
+                                }
+                            }, remainingTime)
+                            
+                            return
+                        } else {
+                            Log.d("ShortStop", "📚 Study app $packageName free time expired, now monitoring")
+                            serviceScope.launch {
+                                repository.clearStudyMode(packageName)
+                            }
+                        }
+                    }
+                    
+                    Log.d("ShortStop", "✅ Starting monitoring for blocked app: $packageName")
+                    startMonitoring(packageName)
+                } else {
+                    Log.d("ShortStop", "❌ App $packageName is not blocked")
+                }
             }
-        }
     }
 
     override fun onInterrupt() {}
@@ -282,9 +285,8 @@ class ShortStopService : AccessibilityService() {
         }
 
         try {
-            // Pause audio/video
-            val audioManager = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
-            audioManager.requestAudioFocus(
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+            audioManager?.requestAudioFocus(
                 null,
                 android.media.AudioManager.STREAM_MUSIC,
                 android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
@@ -300,14 +302,16 @@ class ShortStopService : AccessibilityService() {
                 gravity = Gravity.CENTER
             }
 
-            overlayView = InterventionOverlay(this) {
+            overlayView = InterventionOverlay(this, {
                 hideOverlay()
-            }
+            }, {
+                handleEmergencyExit()
+            })
 
             windowManager.addView(overlayView, params)
             Log.d("ShortStop", "Overlay shown successfully")
         } catch (e: Exception) {
-            Log.e("ShortStop", "Failed to show overlay: ${e.message}")
+            Log.e("ShortStop", "Failed to show overlay: ${e.message}", e)
             overlayView = null
         }
     }
@@ -316,18 +320,32 @@ class ShortStopService : AccessibilityService() {
         overlayView?.let {
             try {
                 windowManager.removeView(it)
-                Log.d("ShortStop", "Overlay hidden and timer reset")
+                Log.d("ShortStop", "Overlay hidden")
                 
-                // Reset accumulated time when blur completes
-                accumulatedTime = 0L
-                appStartTime = System.currentTimeMillis()
+                isWaitingForExit = true
                 
-                // Release audio focus
-                val audioManager = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
-                audioManager.abandonAudioFocus(null)
+                handler.postDelayed({
+                    if (isWaitingForExit && currentApp != null) {
+                        serviceScope.launch {
+                            try {
+                                val blockedApps = blockedAppsList.map { it.packageName }.toSet()
+                                
+                                if (blockedApps.contains(currentApp)) {
+                                    Log.d("ShortStop", "User still in blocked app, showing overlay again")
+                                    showOverlay()
+                                }
+                            } catch (e: Exception) {
+                                Log.e("ShortStop", "Error checking blocked apps: ${e.message}", e)
+                            }
+                        }
+                    }
+                }, 1000)
+                
+                val audioManager = getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+                audioManager?.abandonAudioFocus(null)
                 
             } catch (e: Exception) {
-                Log.e("ShortStop", "Failed to hide overlay: ${e.message}")
+                Log.e("ShortStop", "Failed to hide overlay: ${e.message}", e)
             }
             overlayView = null
         }
@@ -337,10 +355,67 @@ class ShortStopService : AccessibilityService() {
         blurRunnable?.let { handler.removeCallbacks(it) }
         blurRunnable = null
     }
+    
+    private fun handleEmergencyExit() {
+        serviceScope.launch {
+            try {
+                val userStats = repository.userStats.first()
+                if (userStats != null && userStats.points >= 50) {
+                    repository.updatePoints(userStats.points - 50)
+                    Log.d("ShortStop", "Emergency exit: -50 points penalty")
+                }
+            } catch (e: Exception) {
+                Log.e("ShortStop", "Failed to apply emergency exit penalty: ${e.message}")
+            }
+        }
+        hideOverlay()
+        accumulatedTime = 0L
+        isWaitingForExit = false
+    }
+    
+    private fun checkAndRewardCleanExit(pkg: String, prefs: android.content.SharedPreferences) {
+        serviceScope.launch {
+            try {
+                val app = repository.dao.getBlockedApp(pkg) ?: return@launch
+                val exitTime = app.lastExitTime
+                val now = System.currentTimeMillis()
+                
+                if (exitTime > 0 && (now - exitTime) >= 10 * 60 * 1000L) {
+                    val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+                    val userStats = repository.userStats.first() ?: return@launch
+                    
+                    val dailyExitCount = if (userStats.lastRewardDate == today) userStats.dailyExitCount else 0
+                    
+                    val reward = when (dailyExitCount) {
+                        0 -> 50
+                        1 -> 25
+                        2 -> 10
+                        3 -> 5
+                        else -> 1
+                    }
+                    
+                    val currentHour = java.text.SimpleDateFormat("yyyy-MM-dd-HH", java.util.Locale.getDefault()).format(java.util.Date())
+                    val hourlyInterventions = repository.getHourlyInterventionCount(currentHour)
+                    val multiplier = if (hourlyInterventions >= 5) 0.5 else 1.0
+                    val finalReward = (reward * multiplier).toInt()
+                    
+                    repository.claimReward(finalReward, today)
+                    repository.updateLastExitTime(pkg, 0L)
+                    
+                    Log.d("ShortStop", "Clean exit reward: +$finalReward points for $pkg (exit #${dailyExitCount + 1})")
+                }
+            } catch (e: Exception) {
+                Log.e("ShortStop", "Failed to reward clean exit: ${e.message}")
+            }
+        }
+    }
 
     override fun onDestroy() {
         super.onDestroy()
         instance = null
+        _isServiceRunning.value = false
+        handler.removeCallbacksAndMessages(null)
+        serviceScope.cancel()
         hideOverlay()
         cancelTimers()
     }

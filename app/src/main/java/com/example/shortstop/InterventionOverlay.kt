@@ -1,31 +1,44 @@
 package com.example.shortstop
 
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Color
-import android.graphics.PixelFormat
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.view.Gravity
-import android.view.View
-import android.view.WindowManager
+import android.view.animation.LinearInterpolator
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.core.content.ContextCompat
 
-class InterventionOverlay(context: Context, private val onDismiss: () -> Unit) : FrameLayout(context) {
+class InterventionOverlay(context: Context, private val onDismiss: () -> Unit, private val onEmergencyExit: () -> Unit) : FrameLayout(context) {
     
     private val messageView: TextView
-    private val cancelButton: Button
 
     init {
-        // Blur-like background with gradient
-        setBackgroundColor(Color.parseColor("#F0FFFFFF")) // Light blur effect
-        alpha = 0.95f
+        val isDarkMode = (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
         
-        // Make the entire overlay intercept touches
+        val bgColor = if (isDarkMode) "#C0FFFFFF" else "#C0000000"
+        val textColor = if (isDarkMode) "#333333" else "#FFFFFF"
+        val containerBg = if (isDarkMode) "#FFFFFF" else "#1E1E1E"
+        
+        setBackgroundColor(Color.parseColor(bgColor))
+        alpha = 1f
+        
         isClickable = true
         isFocusable = true
-        setOnTouchListener { _, _ -> true } // Consume all touch events
+        setOnTouchListener { _, _ -> true }
+        
+        // Heavy haptic feedback when overlay appears
+        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(500)
+        }
 
         val container = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -33,47 +46,59 @@ class InterventionOverlay(context: Context, private val onDismiss: () -> Unit) :
             layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
                 gravity = Gravity.CENTER
             }
-            setBackgroundColor(Color.parseColor("#FFFFFF"))
+            setBackgroundColor(Color.parseColor(containerBg))
             setPadding(80, 80, 80, 80)
-            // Add rounded corners
-            background = context.getDrawable(android.R.drawable.dialog_holo_light_frame)
+            if (isDarkMode) {
+                background = context.getDrawable(android.R.drawable.dialog_holo_light_frame)
+            } else {
+                background = context.getDrawable(android.R.drawable.dialog_holo_dark_frame)
+            }
         }
 
         messageView = TextView(context).apply {
             textSize = 28f
-            setTextColor(Color.parseColor("#333333"))
+            setTextColor(Color.parseColor(textColor))
             gravity = Gravity.CENTER
-            text = "Cool Down\n\nYou've been seeing me long time, have a break"
+            text = getRandomMessage()
             setPadding(0, 0, 0, 40)
         }
 
-        cancelButton = Button(context).apply {
-            text = "Continue"
-            visibility = View.GONE
-            setOnClickListener { 
-                onDismiss()
+        val emergencyButton = Button(context).apply {
+            text = "🚨 Emergency Exit"
+            setBackgroundColor(Color.parseColor("#FF5252"))
+            setTextColor(Color.WHITE)
+            textSize = 16f
+            setPadding(40, 20, 40, 20)
+            setOnClickListener {
+                onEmergencyExit()
             }
-            // Make button touchable
-            isClickable = true
-            isFocusable = true
         }
 
-        // Show button after 3 seconds (no countdown)
-        postDelayed({
-            // Don't show continue button - force user to wait full 10 seconds
-            // cancelButton.visibility = View.VISIBLE
-        }, 3000)
-
         container.addView(messageView)
-        container.addView(cancelButton)
+        container.addView(emergencyButton)
         addView(container)
+        
+        // Fade from 100% to 0% over 10 seconds
+        ValueAnimator.ofFloat(1f, 0f).apply {
+            duration = 10000
+            interpolator = LinearInterpolator()
+            addUpdateListener { animation ->
+                alpha = animation.animatedValue as Float
+            }
+            start()
+        }
     }
-
-    fun updateMessage(text: String, points: Int) {
-        messageView.text = text
-    }
-
-    fun showCancelButton() {
-        cancelButton.visibility = View.VISIBLE
+    
+    private fun getRandomMessage(): String {
+        val messages = listOf(
+            "Break the loop.\nPut the phone down.",
+            "Is this really how you\nwant to spend your time?",
+            "You've been here a while.\nTake a break.",
+            "Cool down.\nYour goals are waiting.",
+            "Step away.\nYour future self will thank you.",
+            "Pause.\nWhat matters more right now?",
+            "Time to refocus.\nYou've got this."
+        )
+        return messages.random()
     }
 }

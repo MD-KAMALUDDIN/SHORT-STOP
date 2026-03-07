@@ -17,9 +17,7 @@ class ServiceMonitorWorker(
 ) : Worker(context, params) {
 
     override fun doWork(): Result {
-        if (!isAccessibilityServiceEnabled()) {
-            sendNotification()
-        }
+        // Service monitoring only - no notifications
         return Result.success()
     }
 

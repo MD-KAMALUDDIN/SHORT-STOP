@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.example.shortstop.app-mergeDebugResources-2:/values-v23/values-v23.xml",
+            "outputFile": "com.example.shortstop.app-mergeDebugResources-49:/values-v23/values-v23.xml",
             "map": [
                 {
                     "source": "C:\\Users\\mdkam\\.gradle\\caches\\9.0-milestone-1\\transforms\\47b39718f32dbf59a2a2421511301c16\\transformed\\work-runtime-2.9.0\\res\\values-v23\\values-v23.xml",
