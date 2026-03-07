@@ -148,7 +148,7 @@ MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\mdkam\.gradle\cach
 	android:icon
 		ADDED from D:\start\ShortStop\app\src\main\AndroidManifest.xml:24:9-43
 	android:allowBackup
-		ADDED from D:\start\ShortStop\app\src\main\AndroidManifest.xml:23:9-35
+		ADDED from D:\start\ShortStop\app\src\main\AndroidManifest.xml:23:9-36
 	android:theme
 		ADDED from D:\start\ShortStop\app\src\main\AndroidManifest.xml:28:9-59
 service#com.example.shortstop.ShortStopService

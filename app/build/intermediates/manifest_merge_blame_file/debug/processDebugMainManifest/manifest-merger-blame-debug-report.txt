@@ -64,8 +64,8 @@
 35
 36    <application
 36-->D:\start\ShortStop\app\src\main\AndroidManifest.xml:22:5-70:19
-37        android:allowBackup="true"
-37-->D:\start\ShortStop\app\src\main\AndroidManifest.xml:23:9-35
+37        android:allowBackup="false"
+37-->D:\start\ShortStop\app\src\main\AndroidManifest.xml:23:9-36
 38        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
 38-->[androidx.core:core:1.12.0] C:\Users\mdkam\.gradle\caches\9.0-milestone-1\transforms\ac6cbd3c45dd47a7855473ffb914ff88\transformed\core-1.12.0\AndroidManifest.xml:28:18-86
 39        android:debuggable="true"
