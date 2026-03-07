@@ -173,6 +173,7 @@ layout notification_template_icon_group
 layout notification_template_part_chronometer
 layout notification_template_part_time
 mipmap ic_launcher
+raw quotes
 string accessibility_service_description
 string androidx_startup
 string app_name

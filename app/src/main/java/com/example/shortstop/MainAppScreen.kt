@@ -94,8 +94,10 @@ fun MainAppScreen() {
     }
     
     LaunchedEffect(Unit) {
-        if (userStats == null) {
+        val hasInitialized = prefs.getBoolean("has_initialized_stats", false)
+        if (!hasInitialized && userStats == null) {
             repository.updatePoints(100)
+            prefs.edit().putBoolean("has_initialized_stats", true).apply()
         }
     }
     
@@ -266,12 +268,30 @@ fun MainAppScreen() {
             modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp)
         )
         
-        if (showMotivation) MotivationOverlay { showMotivation = false }
-        if (showStats) StatsOverlay(userStats) { showStats = false }
-        if (showRank) RankOverlay(userStats, prefs) { showRank = false }
-        if (showAchievements) AchievementsOverlay(userStats, prefs) { showAchievements = false }
-        if (showHelp) HelpOverlay { showHelp = false }
-        if (showSettings) SettingsOverlay { showSettings = false }
+        if (showMotivation) {
+            androidx.activity.compose.BackHandler { showMotivation = false }
+            MotivationOverlay { showMotivation = false }
+        }
+        if (showStats) {
+            androidx.activity.compose.BackHandler { showStats = false }
+            StatsOverlay(userStats) { showStats = false }
+        }
+        if (showRank) {
+            androidx.activity.compose.BackHandler { showRank = false }
+            RankOverlay(userStats, prefs) { showRank = false }
+        }
+        if (showAchievements) {
+            androidx.activity.compose.BackHandler { showAchievements = false }
+            AchievementsOverlay(userStats, prefs) { showAchievements = false }
+        }
+        if (showHelp) {
+            androidx.activity.compose.BackHandler { showHelp = false }
+            HelpOverlay { showHelp = false }
+        }
+        if (showSettings) {
+            androidx.activity.compose.BackHandler { showSettings = false }
+            SettingsOverlay { showSettings = false }
+        }
         
         if (showServiceMessage) {
             AlertDialog(
@@ -541,38 +561,26 @@ fun MotivationOverlay(onDismiss: () -> Unit) {
     val prefs = context.getSharedPreferences("shortstop_prefs", Context.MODE_PRIVATE)
     val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
     
-    var quote by remember { mutableStateOf(getLocalQuote(context)) }
-    var refreshTrigger by remember { mutableIntStateOf(0) }
-    var quotesUsedToday by remember { mutableIntStateOf(prefs.getInt("quotes_used_$today", 0)) }
-    val quotesRemaining = 3 - quotesUsedToday
+    val lastQuoteDate = prefs.getString("last_quote_date", "") ?: ""
+    val savedQuote = prefs.getString("daily_quote", "") ?: ""
     
-    LaunchedEffect(refreshTrigger) {
-        quote = getLocalQuote(context)
+    val quote = if (lastQuoteDate == today && savedQuote.isNotEmpty()) {
+        savedQuote
+    } else {
+        val newQuote = getLocalQuote(context)
+        prefs.edit().putString("last_quote_date", today).putString("daily_quote", newQuote).apply()
+        newQuote
     }
     
     Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)).clickable { onDismiss() }) {
         Card(modifier = Modifier.align(Alignment.Center).padding(32.dp).clickable(enabled = false) {}, colors = CardDefaults.cardColors(containerColor = Color.White)) {
             Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("💪 Motivation", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("$quotesRemaining quotes left today", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Text("💪 Daily Motivation", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
-                Text(quote, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(16.dp))
+                Text(quote, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(16.dp), textAlign = TextAlign.Center)
                 Spacer(modifier = Modifier.height(16.dp))
-                Button(
-                    onClick = {
-                        if (quotesUsedToday < 3) {
-                            quotesUsedToday++
-                            prefs.edit().putInt("quotes_used_$today", quotesUsedToday).apply()
-                            refreshTrigger++
-                        }
-                    },
-                    enabled = quotesUsedToday < 3,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (quotesUsedToday < 3) MaterialTheme.colorScheme.primary else Color.Gray
-                    )
-                ) {
-                    Text(if (quotesUsedToday < 3) "Get New Quote" else "Daily Limit Reached")
+                Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                    Text("Close")
                 }
             }
         }
@@ -754,9 +762,9 @@ fun RankOverlay(userStats: com.example.shortstop.database.UserStatsEntity?, pref
                             colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E8))
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                PointEarnRow("✅ Clean exit (10 min away)", "50 pts")
-                                PointEarnRow("🔥 Daily streak bonus", "10 pts/day")
-                                PointEarnRow("📚 Complete study session", "5 pts")
+                                PointEarnRow("✅ Clean exit (10 min away)", "50\u00A0pts")
+                                PointEarnRow("🔥 Daily streak bonus", "10\u00A0pts/day")
+                                PointEarnRow("📚 Complete study session", "5\u00A0pts")
                             }
                         }
                     }

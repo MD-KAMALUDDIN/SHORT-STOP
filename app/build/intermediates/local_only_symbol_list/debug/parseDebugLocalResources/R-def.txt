@@ -7,6 +7,7 @@ color shortstop_success
 drawable ic_shortstop_background
 drawable ic_shortstop_foreground
 mipmap ic_launcher
+raw quotes
 string accessibility_service_description
 string app_name
 xml accessibility_service_config
