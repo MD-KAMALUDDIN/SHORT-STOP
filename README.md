@@ -32,8 +32,8 @@ ShortStop is a privacy-first Android app that helps you build healthier phone ha
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/ShortStop.git
-cd ShortStop
+git clone https://github.com/MD-KAMALUDDIN/SHORT-STOP.git
+cd SHORT-STOP
 ```
 
 2. Open in Android Studio (Hedgehog or newer)
@@ -159,12 +159,12 @@ Contributions welcome! Please:
 
 ## 📄 License
 
-[Choose your license - MIT, Apache 2.0, GPL, etc.]
+MIT License - Free to use, modify, and distribute.
 
 ## 📧 Contact
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/ShortStop/issues)
-- **Email**: [YOUR_EMAIL_HERE]
+- **Issues**: [GitHub Issues](https://github.com/MD-KAMALUDDIN/SHORT-STOP/issues)
+- **Email**: mdkamaluddin7339@gmail.com
 
 ## 🙏 Acknowledgments
 

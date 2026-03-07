@@ -135,12 +135,12 @@ All monitoring data is processed in real-time on your device and is NOT stored p
 
 If you have questions about this Privacy Policy or ShortStop's privacy practices:
 
-**Email**: [YOUR_EMAIL_HERE]
+**Email**: mdkamaluddin7339@gmail.com
 **App**: Use the Help section in Settings
 
 ## Legal
 
-This Privacy Policy is governed by the laws of [YOUR_JURISDICTION]. By using ShortStop, you agree to this Privacy Policy.
+This Privacy Policy is governed by the laws of India. By using ShortStop, you agree to this Privacy Policy.
 
 ---
 

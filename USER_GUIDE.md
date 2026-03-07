@@ -289,7 +289,7 @@ Your rank is based on your overall progress:
 ### Need Help?
 
 - **GitHub Issues**: Report bugs or request features
-- **Email**: [YOUR_EMAIL_HERE]
+- **Email**: mdkamaluddin7339@gmail.com
 - **FAQ**: Check this guide first
 
 ### Reporting Bugs
