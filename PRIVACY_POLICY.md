@@ -10,6 +10,8 @@ ShortStop ("we", "our", or "us") is committed to protecting your privacy. This P
 
 **ShortStop does NOT collect, store, transmit, or share any personal data with us or third parties.**
 
+**ShortStop does not have the Internet permission and cannot transmit data.**
+
 All data stays on your device. We have no servers, no analytics, no tracking.
 
 ## Information We Access
