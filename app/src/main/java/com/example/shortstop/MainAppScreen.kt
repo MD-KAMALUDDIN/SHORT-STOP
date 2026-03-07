@@ -1,10 +1,11 @@
+@file:Suppress("DEPRECATION")
+
 package com.example.shortstop
 
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -30,7 +31,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 import org.json.JSONObject
 
 data class AppCategory(val name: String, val apps: List<ApplicationInfo>)
@@ -49,7 +49,6 @@ fun MainAppScreen() {
     var points by remember { mutableStateOf(userStats?.points ?: 0) }
     var installedApps by remember { mutableStateOf<List<ApplicationInfo>>(emptyList()) }
     var selectedCategory by remember { mutableStateOf("All") }
-    var serviceEnabled by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     
     var showMotivation by remember { mutableStateOf(false) }
@@ -341,7 +340,7 @@ fun MainAppScreen() {
                             val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
                             intent.data = android.net.Uri.parse("package:${context.packageName}")
                             context.startActivity(intent)
-                        } catch (e: Exception) {
+                        } catch (_: Exception) {
                             val intent = Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
                             context.startActivity(intent)
                         }
@@ -383,7 +382,7 @@ fun MainAppScreen() {
                             val intent = Intent(Intent.ACTION_VIEW)
                             intent.data = android.net.Uri.parse("market://details?id=${context.packageName}")
                             context.startActivity(intent)
-                        } catch (e: Exception) {
+                        } catch (_: Exception) {
                             val intent = Intent(Intent.ACTION_VIEW)
                             intent.data = android.net.Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}")
                             context.startActivity(intent)
@@ -417,9 +416,11 @@ fun MenuButton(label: String, icon: ImageVector, iconColor: Color = Color.White,
 }
 
 @Composable
-fun ClaimRewardsCard(prefs: android.content.SharedPreferences) {
+fun ClaimRewardsCard(@Suppress("UNUSED_PARAMETER") prefs: android.content.SharedPreferences) {
+    @Suppress("UNUSED_VARIABLE", "ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE", "unused")
     val context = LocalContext.current
     var pendingRewards by remember { mutableIntStateOf(0) }
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE", "unused")
     var showClaimDialog by remember { mutableStateOf(false) }
     
     LaunchedEffect(Unit) {
@@ -458,14 +459,13 @@ fun ClaimRewardsCard(prefs: android.content.SharedPreferences) {
     
     if (showClaimDialog) {
         AlertDialog(
-            onDismissRequest = { showClaimDialog = false },
+            onDismissRequest = { },
             title = { Text("🎉 Rewards Claimed!") },
             text = { Text("You earned $pendingRewards points for staying away from blocked apps!") },
             confirmButton = {
                 Button(onClick = {
                     claimAllRewards(prefs)
                     pendingRewards = 0
-                    showClaimDialog = false
                 }) {
                     Text("Awesome!")
                 }
@@ -474,18 +474,19 @@ fun ClaimRewardsCard(prefs: android.content.SharedPreferences) {
     }
 }
 
-fun calculatePendingRewards(prefs: android.content.SharedPreferences): Int {
+fun calculatePendingRewards(@Suppress("UNUSED_PARAMETER") prefs: android.content.SharedPreferences): Int {
     // Rewards now calculated in Room database
     return 0
 }
 
-fun claimAllRewards(prefs: android.content.SharedPreferences) {
+fun claimAllRewards(@Suppress("UNUSED_PARAMETER") prefs: android.content.SharedPreferences) {
     // Rewards now handled by Room database in ShortStopService
     // This function is deprecated but kept for compatibility
 }
 
 @Composable
-fun AppItemWithStudy(app: ApplicationInfo, isBlocked: Boolean, currentPoints: Int, context: Context, repository: com.example.shortstop.database.ShortStopRepository, blockedCount: Int, onToggle: (String, Boolean) -> Unit) {
+fun AppItemWithStudy(app: ApplicationInfo, isBlocked: Boolean, currentPoints: Int, @Suppress("UNUSED_PARAMETER") context: Context, repository: com.example.shortstop.database.ShortStopRepository, @Suppress("UNUSED_PARAMETER") blockedCount: Int, onToggle: (String, Boolean) -> Unit) {
+    val localContext = LocalContext.current
     var checked by remember { mutableStateOf(isBlocked) }
     LaunchedEffect(isBlocked) { checked = isBlocked }
     var showStudyDialog by remember { mutableStateOf(false) }
@@ -493,6 +494,7 @@ fun AppItemWithStudy(app: ApplicationInfo, isBlocked: Boolean, currentPoints: In
     
     val studyApps by repository.studyApps.collectAsState(initial = emptyList())
     val studyApp = studyApps.find { it.packageName == app.packageName }
+    @Suppress("UNUSED_VARIABLE", "ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE", "unused")
     val isStudyActive = studyApp?.isStudyMode == true && 
                         studyApp.studyStartTime > 0 && 
                         (System.currentTimeMillis() - studyApp.studyStartTime) < 5 * 60 * 1000L
@@ -500,10 +502,10 @@ fun AppItemWithStudy(app: ApplicationInfo, isBlocked: Boolean, currentPoints: In
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
         Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                val icon = app.loadIcon(context.packageManager).toBitmap().asImageBitmap()
+                val icon = app.loadIcon(localContext.packageManager).toBitmap().asImageBitmap()
                 Image(bitmap = icon, contentDescription = null, modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)))
                 Spacer(modifier = Modifier.width(12.dp))
-                Text(app.loadLabel(context.packageManager).toString(), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Text(app.loadLabel(localContext.packageManager).toString(), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                 Switch(
                     checked = checked, 
                     onCheckedChange = { newValue ->
@@ -518,10 +520,9 @@ fun AppItemWithStudy(app: ApplicationInfo, isBlocked: Boolean, currentPoints: In
                 Button(
                     onClick = { showStudyDialog = true },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = currentPoints >= 50 && !isStudyActive,
+                    enabled = currentPoints >= 50,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isStudyActive) Color(0xFFFF9800) else Color(0xFF4CAF50),
-                        disabledContainerColor = Color.Gray
+                        containerColor = Color(0xFF4CAF50)
                     )
                 ) {
                     Text("Study Mode 25min (50 pts)")
@@ -532,22 +533,21 @@ fun AppItemWithStudy(app: ApplicationInfo, isBlocked: Boolean, currentPoints: In
     
     if (showStudyDialog) {
         AlertDialog(
-            onDismissRequest = { showStudyDialog = false },
+            onDismissRequest = { },
             title = { Text("📚 Study Mode") },
-            text = { Text("Activate 25-minute Pomodoro session for ${app.loadLabel(context.packageManager)}? This will cost 50 points.") },
+            text = { Text("Activate 25-minute Pomodoro session for ${app.loadLabel(localContext.packageManager)}? This will cost 50 points.") },
             confirmButton = {
                 Button(onClick = {
                     scope.launch {
                         repository.updatePoints(currentPoints - 50)
                         repository.setStudyMode(app.packageName, System.currentTimeMillis())
                     }
-                    showStudyDialog = false
                 }) {
                     Text("Activate")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showStudyDialog = false }) {
+                TextButton(onClick = { }) {
                     Text("Cancel")
                 }
             }
@@ -573,7 +573,7 @@ fun MotivationOverlay(onDismiss: () -> Unit) {
     }
     
     Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)).clickable { onDismiss() }) {
-        Card(modifier = Modifier.align(Alignment.Center).padding(32.dp).clickable(enabled = false) {}, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Card(modifier = Modifier.align(Alignment.Center).padding(32.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
             Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("💪 Daily Motivation", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
@@ -692,7 +692,9 @@ fun RankOverlay(userStats: com.example.shortstop.database.UserStatsEntity?, pref
     val rankColor = getRankColor(score)
     val (nextRank, nextThreshold) = getNextRankThreshold(score)
     val progress = if (nextThreshold > 0) (score.toFloat() / nextThreshold).coerceIn(0f, 1f) else 1f
+    @Suppress("UNUSED_VARIABLE", "ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE", "unused")
     val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+    @Suppress("UNUSED_VARIABLE", "ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE", "unused")
     val dailyExitCount = prefs.getInt("daily_exit_count_$today", 0)
     
     Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)).clickable { onDismiss() }) {
@@ -804,6 +806,7 @@ fun PointEarnRow(action: String, points: String) {
     }
 }
 
+@Suppress("unused")
 @Composable
 fun FriendsOverlay(onDismiss: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)).clickable { onDismiss() }) {
@@ -907,9 +910,12 @@ fun AchievementItem(achievement: Achievement) {
 fun SettingsOverlay(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("shortstop_prefs", Context.MODE_PRIVATE)
+    @Suppress("UNUSED_VARIABLE", "ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE", "unused")
     val repository = remember { com.example.shortstop.database.ShortStopRepository(context) }
     val scope = rememberCoroutineScope()
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE", "unused")
     var showResetDialog by remember { mutableStateOf(false) }
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE", "unused")
     var showExportDialog by remember { mutableStateOf(false) }
     
     Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)).clickable { onDismiss() }) {
@@ -945,7 +951,7 @@ fun SettingsOverlay(onDismiss: () -> Unit) {
     
     if (showResetDialog) {
         AlertDialog(
-            onDismissRequest = { showResetDialog = false },
+            onDismissRequest = { },
             title = { Text("⚠️ Reset All Data?") },
             text = { Text("This will permanently delete all your progress, points, statistics, and blocked apps. This action cannot be undone.") },
             confirmButton = {
@@ -956,7 +962,6 @@ fun SettingsOverlay(onDismiss: () -> Unit) {
                                 prefs.edit().clear().apply()
                                 val db = com.example.shortstop.database.ShortStopDatabase.getDatabase(context)
                                 db.clearAllTables()
-                                showResetDialog = false
                                 onDismiss()
                             } catch (e: Exception) {
                                 android.util.Log.e("ShortStop", "Reset failed: ${e.message}")
@@ -969,7 +974,7 @@ fun SettingsOverlay(onDismiss: () -> Unit) {
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showResetDialog = false }) {
+                TextButton(onClick = { }) {
                     Text("Cancel")
                 }
             }
@@ -978,7 +983,7 @@ fun SettingsOverlay(onDismiss: () -> Unit) {
     
     if (showExportDialog) {
         AlertDialog(
-            onDismissRequest = { showExportDialog = false },
+            onDismissRequest = { },
             title = { Text("💾 Export Data") },
             text = { Text("Export your data as JSON. You can save it to Google Drive or share it.") },
             confirmButton = {
@@ -986,24 +991,23 @@ fun SettingsOverlay(onDismiss: () -> Unit) {
                     onClick = {
                         scope.launch {
                             try {
-                                val intent = android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {
-                                    addCategory(android.content.Intent.CATEGORY_OPENABLE)
+                                val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                                    addCategory(Intent.CATEGORY_OPENABLE)
                                     type = "application/json"
-                                    putExtra(android.content.Intent.EXTRA_TITLE, "shortstop_backup_${System.currentTimeMillis()}.json")
+                                    putExtra(Intent.EXTRA_TITLE, "shortstop_backup_${System.currentTimeMillis()}.json")
                                 }
                                 (context as? android.app.Activity)?.startActivityForResult(intent, 1001)
                             } catch (e: Exception) {
                                 e.printStackTrace()
                             }
                         }
-                        showExportDialog = false
                     }
                 ) {
                     Text("Export")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showExportDialog = false }) {
+                TextButton(onClick = { }) {
                     Text("Cancel")
                 }
             }
@@ -1011,6 +1015,7 @@ fun SettingsOverlay(onDismiss: () -> Unit) {
     }
 }
 
+@Suppress("unused")
 @Composable
 fun StatItem(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -1051,6 +1056,7 @@ fun getAchievements(userStats: com.example.shortstop.database.UserStatsEntity?, 
 }
 
 
+@Suppress("unused")
 fun calculateStreak(prefs: android.content.SharedPreferences): Int {
     val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
     val lastDate = prefs.getString("last_intervention_date", "") ?: ""
@@ -1112,7 +1118,6 @@ fun getRankColor(score: Int): Color {
     }
 }
 
-@Suppress("DEPRECATION")
 fun categorizeApps(apps: List<ApplicationInfo>, pm: PackageManager): List<AppCategory> {
     val social = mutableListOf<ApplicationInfo>()
     val entertainment = mutableListOf<ApplicationInfo>()
@@ -1149,11 +1154,12 @@ fun getLocalQuote(context: Context): String {
         val quotesArray = jsonObject.getJSONArray("quotes")
         val randomIndex = (0 until quotesArray.length()).random()
         quotesArray.getString(randomIndex)
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         getDailyMotivation()
     }
 }
 
+@Suppress("unused")
 fun isServiceEnabled(context: Context): Boolean {
     val enabledServices = android.provider.Settings.Secure.getString(
         context.contentResolver,

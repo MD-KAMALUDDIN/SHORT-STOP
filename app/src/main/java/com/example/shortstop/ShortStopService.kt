@@ -17,8 +17,6 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import java.net.HttpURLConnection
-import java.net.URL
 import org.json.JSONObject
 
 class ShortStopService : AccessibilityService() {
