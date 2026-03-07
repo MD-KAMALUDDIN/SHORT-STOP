@@ -114,12 +114,14 @@ Your rank is based on your overall progress:
 
 | Rank | Score Needed | Description |
 |------|--------------|-------------|
-| 🌱 Novice | 0-49 | Just getting started |
-| 🌿 Apprentice | 50-149 | Building habits |
-| 🌳 Journeyman | 150-299 | Making progress |
-| ⭐ Expert | 300-499 | Strong discipline |
-| 💎 Master | 500-799 | Exceptional control |
-| 👑 Legend | 800+ | Digital wellbeing master |
+| 😔 Struggling Beginner | < 0 | Need to improve |
+| 🌱 Getting Started | 0-49 | Just getting started |
+| 🔨 Building Habits | 50-149 | Building habits |
+| 🎯 Focused Learner | 150-299 | Making progress |
+| 🧘 Self-Control Master | 300-499 | Strong discipline |
+| ⚔️ Digital Warrior | 500-749 | Exceptional control |
+| 🏆 Wellness Champion | 750-999 | Nearly perfect |
+| 👑 Ultimate Controller | 1000+ | Digital wellbeing master |
 
 **Score Calculation:**
 - Streak days × 10 points

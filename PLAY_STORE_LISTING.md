@@ -38,7 +38,7 @@ ShortStop helps you break free from endless scrolling and phone addiction. Using
 🏆 GAMIFICATION THAT WORKS
 • Earn points for clean exits and maintaining streaks
 • Unlock achievements as you progress
-• Rank system from "Getting Started" to "Ultimate Controller"
+• Rank system from "🌱 Getting Started" to "👑 Ultimate Controller"
 • Track interventions, time saved, and study sessions
 
 📊 DETAILED STATISTICS

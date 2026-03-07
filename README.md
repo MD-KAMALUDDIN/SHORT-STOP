@@ -68,7 +68,7 @@ Your rank is calculated based on:
 - **Study sessions** × 5 points
 - **Interventions** × 2 points
 
-**Ranks**: Novice → Apprentice → Journeyman → Expert → Master → Legend
+**Ranks**: 😔 Struggling Beginner → 🌱 Getting Started → 🔨 Building Habits → 🎯 Focused Learner → 🧘 Self-Control Master → ⚔️ Digital Warrior → 🏆 Wellness Champion → 👑 Ultimate Controller
 
 ## 🛠️ Technical Details
 

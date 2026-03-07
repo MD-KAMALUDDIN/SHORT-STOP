@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Study Mode with 25-minute focused sessions
 - App blocking for Social Media, Entertainment, and Other categories
 - Progress tracking: streaks, time saved, study sessions, interventions
-- Rank progression system (Novice → Legend)
+- Rank progression system (😔 Struggling Beginner → 👑 Ultimate Controller)
 - Category filter with "All" option
 - Statistics dashboard with vertical StatCard layout
 - Onboarding flow with permission setup
