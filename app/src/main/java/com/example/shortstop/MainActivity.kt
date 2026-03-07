@@ -27,6 +27,11 @@ class MainActivity : ComponentActivity() {
         
         val prefs = getSharedPreferences("shortstop_prefs", Context.MODE_PRIVATE)
         
+        // Set early adopter flag on first run
+        if (!prefs.contains("is_early_adopter")) {
+            prefs.edit().putBoolean("is_early_adopter", true).apply()
+        }
+        
         if (!prefs.getBoolean("has_completed_onboarding", false)) {
             startActivity(Intent(this, OnboardingActivity::class.java))
             finish()
