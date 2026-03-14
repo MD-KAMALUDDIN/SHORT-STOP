@@ -48,10 +48,10 @@ class ShortStopService : AccessibilityService() {
         private const val KEY_APP_DAILY_TIME_SAVED_PREFIX = "app_daily_time_saved_"
         private const val KEY_APP_DAILY_STUDY_SESSIONS_PREFIX = "app_daily_study_sessions_"
 
-        private const val TRIGGER_THRESHOLD_MS = 7 * 1000L  // 7s - Quick interception
-        private const val OVERLAY_DURATION_MS = 30 * 1000L   // 30s - Pattern interrupt
-        private const val STUDY_MODE_DURATION_MS = 25 * 60 * 1000L  // 25min - Pomodoro standard
-        private const val COOLDOWN_PERIOD_MS = 3 * 60 * 1000L  // 3min - Anti-cheat cooldown
+        private const val TRIGGER_THRESHOLD_MS = 7 * 1000L
+        private const val OVERLAY_DURATION_MS = 30 * 1000L
+        private const val STUDY_MODE_DURATION_MS = 25 * 60 * 1000L
+        private const val COOLDOWN_PERIOD_MS = 3 * 60 * 1000L
     }
 
     private lateinit var windowManager: WindowManager
@@ -221,10 +221,8 @@ class ShortStopService : AccessibilityService() {
                     val timeSinceExit = now - lastExit
                     
                     if (timeSinceExit < COOLDOWN_PERIOD_MS) {
-                        Log.d("ShortStop", "Re-entry within 3min cooldown! Showing overlay instantly")
                         accumulatedTime = TRIGGER_THRESHOLD_MS
                     } else {
-                        Log.d("ShortStop", "Cooldown expired, resetting timer")
                         accumulatedTime = 0L
                     }
                 }

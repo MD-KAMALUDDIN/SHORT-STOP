@@ -3,7 +3,6 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.example.shortstop">
 
-    <!-- ✅ REQUIRED FOR ANDROID 11+ TO SEE USER INSTALLED APPS -->
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />

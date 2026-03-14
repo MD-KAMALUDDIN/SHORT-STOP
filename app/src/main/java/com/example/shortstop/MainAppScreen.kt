@@ -144,7 +144,6 @@ fun MainAppScreen() {
                 else -> categories.filter { it.name.contains(selectedCategory) }
             }
             
-            // Apply search filter
             val filteredCategories = if (searchQuery.isNotEmpty()) {
                 filteredByCategory.map { category ->
                     AppCategory(
@@ -475,13 +474,10 @@ fun ClaimRewardsCard(@Suppress("UNUSED_PARAMETER") prefs: android.content.Shared
 }
 
 fun calculatePendingRewards(@Suppress("UNUSED_PARAMETER") prefs: android.content.SharedPreferences): Int {
-    // Rewards now calculated in Room database
     return 0
 }
 
 fun claimAllRewards(@Suppress("UNUSED_PARAMETER") prefs: android.content.SharedPreferences) {
-    // Rewards now handled by Room database in ShortStopService
-    // This function is deprecated but kept for compatibility
 }
 
 @Composable
@@ -1107,14 +1103,14 @@ fun getNextRankThreshold(score: Int): Pair<String, Int> {
 
 fun getRankColor(score: Int): Color {
     return when {
-        score < 0 -> Color(0xFF9E9E9E)      // Gray
-        score < 50 -> Color(0xFF8BC34A)     // Light Green
-        score < 150 -> Color(0xFF2196F3)    // Blue
-        score < 300 -> Color(0xFF9C27B0)    // Purple
-        score < 500 -> Color(0xFF009688)    // Teal
-        score < 750 -> Color(0xFFFF9800)    // Orange
-        score < 1000 -> Color(0xFFFFD700)   // Gold
-        else -> Color(0xFF00FF00)           // Neon Green
+        score < 0 -> Color(0xFF9E9E9E)
+        score < 50 -> Color(0xFF8BC34A)
+        score < 150 -> Color(0xFF2196F3)
+        score < 300 -> Color(0xFF9C27B0)
+        score < 500 -> Color(0xFF009688)
+        score < 750 -> Color(0xFFFF9800)
+        score < 1000 -> Color(0xFFFFD700)
+        else -> Color(0xFF00FF00)
     }
 }
 

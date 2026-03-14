@@ -31,7 +31,7 @@ class InterventionOverlay(context: Context, private val onDismiss: () -> Unit, p
         isFocusable = true
         setOnTouchListener { _, _ -> true }
         
-        // Heavy haptic feedback when overlay appears
+        // Haptic feedback when overlay appears
         val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             vibrator.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
@@ -78,7 +78,7 @@ class InterventionOverlay(context: Context, private val onDismiss: () -> Unit, p
         container.addView(emergencyButton)
         addView(container)
         
-        // Fade from 100% to 0% over 10 seconds
+        // Fade from full opacity to transparent over 10 seconds
         ValueAnimator.ofFloat(1f, 0f).apply {
             duration = 10000
             interpolator = LinearInterpolator()
