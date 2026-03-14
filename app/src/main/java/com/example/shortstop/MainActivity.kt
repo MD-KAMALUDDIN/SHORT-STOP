@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -48,9 +49,18 @@ class MainActivity : ComponentActivity() {
                 MaterialTheme {
                     Surface(modifier = Modifier.fillMaxSize()) {
                         val step = remember { mutableStateOf(prefs.getInt("setup_step", 0)) }
+                        val declinedPermission = remember { mutableStateOf(prefs.getBoolean("declined_permission", false)) }
                         
-                        when (step.value) {
-                            0 -> OverlayPermissionScreen(
+                        when {
+                            declinedPermission.value -> StandbyModeScreen(
+                                onEnableFocusMode = {
+                                    declinedPermission.value = false
+                                    prefs.edit().putBoolean("declined_permission", false).apply()
+                                    step.value = 1
+                                    prefs.edit().putInt("setup_step", 1).apply()
+                                }
+                            )
+                            step.value == 0 -> OverlayPermissionScreen(
                                 onContinue = {
                                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                                         val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
@@ -58,13 +68,17 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             )
-                            1 -> AccessibilityDisclosureScreen(
-                                onContinue = {
+                            step.value == 1 -> AccessibilityDisclosureScreen(
+                                onAgree = {
                                     prefs.edit().putInt("setup_step", 2).apply()
                                     step.value = 2
+                                },
+                                onDecline = {
+                                    prefs.edit().putBoolean("declined_permission", true).apply()
+                                    declinedPermission.value = true
                                 }
                             )
-                            2 -> EnableServiceScreen(
+                            step.value == 2 -> EnableServiceScreen(
                                 onContinue = {
                                     val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                                     startActivity(intent)
@@ -159,50 +173,80 @@ fun OverlayPermissionScreen(onContinue: () -> Unit) {
 }
 
 @Composable
-fun AccessibilityDisclosureScreen(onContinue: () -> Unit) {
+fun StandbyModeScreen(onEnableFocusMode: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text(
-            "🔒",
-            style = MaterialTheme.typography.displayLarge
-        )
+        Text("⏸️", style = MaterialTheme.typography.displayLarge)
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            "Accessibility Service Disclosure",
+            "Standby Mode",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Text(
+                "ShortStop is currently in 'Standby Mode.' To start your focus sessions and block distracting apps, we need your permission to monitor app switches.",
+                modifier = Modifier.padding(20.dp),
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center
+            )
+        }
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(onClick = onEnableFocusMode, modifier = Modifier.fillMaxWidth()) {
+            Text("Enable Focus Mode")
+        }
+    }
+}
+
+@Composable
+fun AccessibilityDisclosureScreen(onAgree: () -> Unit, onDecline: () -> Unit) {
+    BackHandler { onDecline() }
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("🔒", style = MaterialTheme.typography.displayLarge)
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            "Mindful Usage Monitoring",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            "ShortStop uses Accessibility Service to:",
+            "ShortStop needs the Accessibility Service permission to detect when you open distracting apps. This allows us to show you a 30-second focus timer to help you stay productive.",
             style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            "• Monitor which apps you're using\n• Pause your screen for 30 seconds when you exceed time limits\n• Help you break free from digital distractions",
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Start
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            "We do NOT collect, store, or share any personal data. Everything stays on your device.",
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(32.dp))
-        Button(
-            onClick = onContinue,
-            modifier = Modifier.fillMaxWidth()
+        Spacer(modifier = Modifier.height(24.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFFE8F5E8))
         ) {
-            Text("I Understand and Continue")
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Privacy Guarantee", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                Text("✅  No data is collected or stored.")
+                Text("✅  No data leaves your device.")
+                Text("✅  ShortStop works 100% offline.")
+            }
+        }
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(onClick = onAgree, modifier = Modifier.fillMaxWidth()) {
+            Text("I Agree")
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        OutlinedButton(onClick = onDecline, modifier = Modifier.fillMaxWidth()) {
+            Text("No Thanks")
         }
     }
 }
