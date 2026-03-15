@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.os.VibratorManager
 import android.view.Gravity
 import android.view.animation.LinearInterpolator
 import android.widget.Button
@@ -32,7 +33,12 @@ class InterventionOverlay(context: Context, private val onDismiss: () -> Unit, p
         setOnTouchListener { _, _ -> true }
         
         // Haptic feedback when overlay appears
-        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             vibrator.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
         } else {
@@ -78,9 +84,8 @@ class InterventionOverlay(context: Context, private val onDismiss: () -> Unit, p
         container.addView(emergencyButton)
         addView(container)
         
-        // Fade from full opacity to transparent over 10 seconds
         ValueAnimator.ofFloat(1f, 0f).apply {
-            duration = 10000
+            duration = 30000
             interpolator = LinearInterpolator()
             addUpdateListener { animation ->
                 alpha = animation.animatedValue as Float

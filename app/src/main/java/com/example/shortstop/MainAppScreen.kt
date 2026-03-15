@@ -458,13 +458,14 @@ fun ClaimRewardsCard(@Suppress("UNUSED_PARAMETER") prefs: android.content.Shared
     
     if (showClaimDialog) {
         AlertDialog(
-            onDismissRequest = { },
+            onDismissRequest = { showClaimDialog = false },
             title = { Text("🎉 Rewards Claimed!") },
             text = { Text("You earned $pendingRewards points for staying away from blocked apps!") },
             confirmButton = {
                 Button(onClick = {
                     claimAllRewards(prefs)
                     pendingRewards = 0
+                    showClaimDialog = false
                 }) {
                     Text("Awesome!")
                 }
@@ -529,7 +530,7 @@ fun AppItemWithStudy(app: ApplicationInfo, isBlocked: Boolean, currentPoints: In
     
     if (showStudyDialog) {
         AlertDialog(
-            onDismissRequest = { },
+            onDismissRequest = { showStudyDialog = false },
             title = { Text("📚 Study Mode") },
             text = { Text("Activate 25-minute Pomodoro session for ${app.loadLabel(localContext.packageManager)}? This will cost 50 points.") },
             confirmButton = {
@@ -538,12 +539,13 @@ fun AppItemWithStudy(app: ApplicationInfo, isBlocked: Boolean, currentPoints: In
                         repository.updatePoints(currentPoints - 50)
                         repository.setStudyMode(app.packageName, System.currentTimeMillis())
                     }
+                    showStudyDialog = false
                 }) {
                     Text("Activate")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { }) {
+                TextButton(onClick = { showStudyDialog = false }) {
                     Text("Cancel")
                 }
             }
@@ -947,7 +949,7 @@ fun SettingsOverlay(onDismiss: () -> Unit) {
     
     if (showResetDialog) {
         AlertDialog(
-            onDismissRequest = { },
+            onDismissRequest = { showResetDialog = false },
             title = { Text("⚠️ Reset All Data?") },
             text = { Text("This will permanently delete all your progress, points, statistics, and blocked apps. This action cannot be undone.") },
             confirmButton = {
@@ -970,7 +972,7 @@ fun SettingsOverlay(onDismiss: () -> Unit) {
                 }
             },
             dismissButton = {
-                TextButton(onClick = { }) {
+                TextButton(onClick = { showResetDialog = false }) {
                     Text("Cancel")
                 }
             }
@@ -979,7 +981,7 @@ fun SettingsOverlay(onDismiss: () -> Unit) {
     
     if (showExportDialog) {
         AlertDialog(
-            onDismissRequest = { },
+            onDismissRequest = { showExportDialog = false },
             title = { Text("💾 Export Data") },
             text = { Text("Export your data as JSON. You can save it to Google Drive or share it.") },
             confirmButton = {
@@ -997,13 +999,14 @@ fun SettingsOverlay(onDismiss: () -> Unit) {
                                 e.printStackTrace()
                             }
                         }
+                        showExportDialog = false
                     }
                 ) {
                     Text("Export")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { }) {
+                TextButton(onClick = { showExportDialog = false }) {
                     Text("Cancel")
                 }
             }
@@ -1069,10 +1072,8 @@ fun calculateStreak(prefs: android.content.SharedPreferences): Int {
 
 fun calculateRankScore(userStats: com.example.shortstop.database.UserStatsEntity?): Int {
     val streak = userStats?.currentStreak ?: 0
-    val timeSaved = (userStats?.totalTimeSaved ?: 0L) / 60000
-    val studySessions = userStats?.successfulStudySessions ?: 0
     val interventions = userStats?.totalInterventions ?: 0
-    return (streak * 10) + timeSaved.toInt() + (studySessions * 5) - (interventions * 3)
+    return (streak * 10) + (interventions * 2)
 }
 
 fun getRankFromScore(score: Int): String {

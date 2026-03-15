@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="shortstop_accent">#6366F1</color>
-    <color name="shortstop_background">#FFFFFF</color>
-    <color name="shortstop_charcoal">#2B2F36</color>
-    <color name="shortstop_success">#10B981</color>
-    <string name="accessibility_service_description">ShortStop uses accessibility services to detect rapid app switching and help you stay focused.</string>
-    <string name="app_name">ShortStop</string>
-</resources>

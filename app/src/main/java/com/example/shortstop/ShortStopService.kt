@@ -282,11 +282,14 @@ class ShortStopService : AccessibilityService() {
 
         try {
             val audioManager = getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-            audioManager?.requestAudioFocus(
-                null,
-                android.media.AudioManager.STREAM_MUSIC,
-                android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
-            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val focusRequest = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                    .build()
+                audioManager?.requestAudioFocus(focusRequest)
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager?.requestAudioFocus(null, android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            }
 
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -338,7 +341,14 @@ class ShortStopService : AccessibilityService() {
                 }, 1000)
                 
                 val audioManager = getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-                audioManager?.abandonAudioFocus(null)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val focusRequest = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                        .build()
+                    audioManager?.abandonAudioFocusRequest(focusRequest)
+                } else {
+                    @Suppress("DEPRECATION")
+                    audioManager?.abandonAudioFocus(null)
+                }
                 
             } catch (e: Exception) {
                 Log.e("ShortStop", "Failed to hide overlay: ${e.message}", e)
@@ -369,7 +379,7 @@ class ShortStopService : AccessibilityService() {
         isWaitingForExit = false
     }
     
-    private fun checkAndRewardCleanExit(pkg: String, prefs: android.content.SharedPreferences) {
+    private fun checkAndRewardCleanExit(pkg: String, @Suppress("UNUSED_PARAMETER") prefs: android.content.SharedPreferences) {
         serviceScope.launch {
             try {
                 val app = repository.dao.getBlockedApp(pkg) ?: return@launch
