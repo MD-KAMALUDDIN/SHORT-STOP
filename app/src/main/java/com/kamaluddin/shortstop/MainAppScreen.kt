@@ -1,6 +1,4 @@
-@file:Suppress("DEPRECATION")
-
-package com.example.shortstop
+package com.kamaluddin.shortstop
 
 import android.content.Context
 import android.content.Intent
@@ -30,6 +28,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -40,7 +40,7 @@ data class AppCategory(val name: String, val apps: List<ApplicationInfo>)
 fun MainAppScreen() {
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("shortstop_prefs", Context.MODE_PRIVATE)
-    val repository = remember { com.example.shortstop.database.ShortStopRepository(context) }
+    val repository = remember { com.kamaluddin.shortstop.database.ShortStopRepository(context) }
     
     val userStats by repository.userStats.collectAsState(initial = null)
     val blockedAppsList by repository.blockedApps.collectAsState(initial = emptyList())
@@ -56,7 +56,6 @@ fun MainAppScreen() {
     var showRank by remember { mutableStateOf(false) }
     var showAchievements by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
-    var showServiceMessage by remember { mutableStateOf(false) }
     var showBatteryDialog by remember { mutableStateOf(false) }
     var showRatingPrompt by remember { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
@@ -124,7 +123,8 @@ fun MainAppScreen() {
                             if (serviceRunning) Color.Green else Color.Red
                         ) {
                             if (!serviceRunning) {
-                                showServiceMessage = true
+                                val serviceIntent = Intent(context, ShortStopService::class.java)
+                                androidx.core.content.ContextCompat.startForegroundService(context, serviceIntent)
                             }
                         }
                         MenuButton("Motivation", Icons.Default.Star, Color.White) { showMotivation = true }
@@ -291,28 +291,7 @@ fun MainAppScreen() {
             SettingsOverlay { showSettings = false }
         }
         
-        if (showServiceMessage) {
-            AlertDialog(
-                onDismissRequest = { showServiceMessage = false },
-                containerColor = Color.White.copy(alpha = 0.95f),
-                title = { Text("⚠️ Service Not Running") },
-                text = { Text("Please turn OFF and then turn ON the ShortStop accessibility service to activate it properly.") },
-                confirmButton = {
-                    Button(onClick = {
-                        showServiceMessage = false
-                        val intent = Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                        context.startActivity(intent)
-                    }) {
-                        Text("Open Settings")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showServiceMessage = false }) {
-                        Text("Cancel")
-                    }
-                }
-            )
-        }
+
         
         if (showBatteryDialog) {
             AlertDialog(
@@ -335,14 +314,8 @@ fun MainAppScreen() {
                     Button(onClick = {
                         showBatteryDialog = false
                         prefs.edit().putBoolean("has_shown_battery_dialog", true).apply()
-                        try {
-                            val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                            intent.data = android.net.Uri.parse("package:${context.packageName}")
-                            context.startActivity(intent)
-                        } catch (_: Exception) {
-                            val intent = Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                            context.startActivity(intent)
-                        }
+                        val intent = Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                        context.startActivity(intent)
                     }) {
                         Text("Open Settings")
                     }
@@ -482,7 +455,7 @@ fun claimAllRewards(@Suppress("UNUSED_PARAMETER") prefs: android.content.SharedP
 }
 
 @Composable
-fun AppItemWithStudy(app: ApplicationInfo, isBlocked: Boolean, currentPoints: Int, @Suppress("UNUSED_PARAMETER") context: Context, repository: com.example.shortstop.database.ShortStopRepository, @Suppress("UNUSED_PARAMETER") blockedCount: Int, onToggle: (String, Boolean) -> Unit) {
+fun AppItemWithStudy(app: ApplicationInfo, isBlocked: Boolean, currentPoints: Int, @Suppress("UNUSED_PARAMETER") context: Context, repository: com.kamaluddin.shortstop.database.ShortStopRepository, @Suppress("UNUSED_PARAMETER") blockedCount: Int, onToggle: (String, Boolean) -> Unit) {
     val localContext = LocalContext.current
     var checked by remember { mutableStateOf(isBlocked) }
     LaunchedEffect(isBlocked) { checked = isBlocked }
@@ -586,7 +559,7 @@ fun MotivationOverlay(onDismiss: () -> Unit) {
 }
 
 @Composable
-fun StatsOverlay(userStats: com.example.shortstop.database.UserStatsEntity?, onDismiss: () -> Unit) {
+fun StatsOverlay(userStats: com.kamaluddin.shortstop.database.UserStatsEntity?, onDismiss: () -> Unit) {
     val interventions = userStats?.totalInterventions ?: 0
     val timeSaved = userStats?.totalTimeSaved ?: 0L
     val studySessions = userStats?.successfulStudySessions ?: 0
@@ -684,7 +657,7 @@ fun StatCard(title: String, value: String, icon: String, color: Color) {
 }
 
 @Composable
-fun RankOverlay(userStats: com.example.shortstop.database.UserStatsEntity?, prefs: android.content.SharedPreferences, onDismiss: () -> Unit) {
+fun RankOverlay(userStats: com.kamaluddin.shortstop.database.UserStatsEntity?, prefs: android.content.SharedPreferences, onDismiss: () -> Unit) {
     val score = calculateRankScore(userStats)
     val rank = getRankFromScore(score)
     val rankColor = getRankColor(score)
@@ -874,7 +847,7 @@ fun HelpSection(title: String, content: String) {
 }
 
 @Composable
-fun AchievementsOverlay(userStats: com.example.shortstop.database.UserStatsEntity?, prefs: android.content.SharedPreferences, onDismiss: () -> Unit) {
+fun AchievementsOverlay(userStats: com.kamaluddin.shortstop.database.UserStatsEntity?, prefs: android.content.SharedPreferences, onDismiss: () -> Unit) {
     val achievements = getAchievements(userStats, prefs)
     
     Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)).clickable { onDismiss() }) {
@@ -908,13 +881,25 @@ fun AchievementItem(achievement: Achievement) {
 fun SettingsOverlay(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("shortstop_prefs", Context.MODE_PRIVATE)
-    @Suppress("UNUSED_VARIABLE", "ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE", "unused")
-    val repository = remember { com.example.shortstop.database.ShortStopRepository(context) }
+    val repository = remember { com.kamaluddin.shortstop.database.ShortStopRepository(context) }
     val scope = rememberCoroutineScope()
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE", "unused")
     var showResetDialog by remember { mutableStateOf(false) }
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE", "unused")
     var showExportDialog by remember { mutableStateOf(false) }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        scope.launch {
+            try {
+                context.contentResolver.openOutputStream(uri)?.use { stream ->
+                    repository.exportData(stream)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
     
     Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)).clickable { onDismiss() }) {
         Card(modifier = Modifier.align(Alignment.Center).padding(32.dp).fillMaxWidth(0.9f).verticalScroll(rememberScrollState()), colors = CardDefaults.cardColors(containerColor = Color.White)) {
@@ -958,7 +943,7 @@ fun SettingsOverlay(onDismiss: () -> Unit) {
                         scope.launch {
                             try {
                                 prefs.edit().clear().apply()
-                                val db = com.example.shortstop.database.ShortStopDatabase.getDatabase(context)
+                                val db = com.kamaluddin.shortstop.database.ShortStopDatabase.getDatabase(context)
                                 db.clearAllTables()
                                 onDismiss()
                             } catch (e: Exception) {
@@ -987,19 +972,8 @@ fun SettingsOverlay(onDismiss: () -> Unit) {
             confirmButton = {
                 Button(
                     onClick = {
-                        scope.launch {
-                            try {
-                                val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-                                    addCategory(Intent.CATEGORY_OPENABLE)
-                                    type = "application/json"
-                                    putExtra(Intent.EXTRA_TITLE, "shortstop_backup_${System.currentTimeMillis()}.json")
-                                }
-                                (context as? android.app.Activity)?.startActivityForResult(intent, 1001)
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
-                        }
                         showExportDialog = false
+                        exportLauncher.launch("shortstop_backup_${System.currentTimeMillis()}.json")
                     }
                 ) {
                     Text("Export")
@@ -1025,7 +999,7 @@ fun StatItem(label: String, value: String) {
 
 data class Achievement(val icon: String, val name: String, val description: String, val unlocked: Boolean)
 
-fun getAchievements(userStats: com.example.shortstop.database.UserStatsEntity?, prefs: android.content.SharedPreferences): List<Achievement> {
+fun getAchievements(userStats: com.kamaluddin.shortstop.database.UserStatsEntity?, prefs: android.content.SharedPreferences): List<Achievement> {
     val interventions = userStats?.totalInterventions ?: 0
     val studySessions = userStats?.successfulStudySessions ?: 0
     val streak = userStats?.currentStreak ?: 0
@@ -1070,7 +1044,7 @@ fun calculateStreak(prefs: android.content.SharedPreferences): Int {
     return if (lastDate == yesterday) currentStreak else 0
 }
 
-fun calculateRankScore(userStats: com.example.shortstop.database.UserStatsEntity?): Int {
+fun calculateRankScore(userStats: com.kamaluddin.shortstop.database.UserStatsEntity?): Int {
     val streak = userStats?.currentStreak ?: 0
     val interventions = userStats?.totalInterventions ?: 0
     return (streak * 10) + (interventions * 2)
@@ -1156,14 +1130,6 @@ fun getLocalQuote(context: Context): String {
     }
 }
 
-@Suppress("unused")
-fun isServiceEnabled(context: Context): Boolean {
-    val enabledServices = android.provider.Settings.Secure.getString(
-        context.contentResolver,
-        android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-    ) ?: return false
-    return enabledServices.contains(context.packageName) && enabledServices.contains("ShortStopService")
-}
 
 fun getDailyMotivation(): String {
     val quotes = listOf(

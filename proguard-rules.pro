@@ -1,7 +1,7 @@
 # Add project specific ProGuard rules here.
 
 # Keep Room entities
--keep class com.example.shortstop.database.** { *; }
+-keep class com.kamaluddin.shortstop.database.** { *; }
 
 # Keep service and receiver entry points
 -keep public class * extends android.app.Service

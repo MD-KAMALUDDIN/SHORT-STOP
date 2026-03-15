@@ -1,4 +1,4 @@
-package com.example.shortstop.database
+package com.kamaluddin.shortstop.database
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey

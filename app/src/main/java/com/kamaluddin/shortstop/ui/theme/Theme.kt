@@ -1,4 +1,4 @@
-package com.example.shortstop.ui.theme
+package com.kamaluddin.shortstop.ui.theme
 
 import android.app.Activity
 import android.os.Build

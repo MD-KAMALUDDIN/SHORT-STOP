@@ -1,13 +1,15 @@
-package com.example.shortstop
+package com.kamaluddin.shortstop
 
+import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Process
 import android.provider.Settings
-import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -21,12 +23,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
-import java.util.concurrent.TimeUnit
+import androidx.core.content.ContextCompat
 
-// setup_step: 0=Overlay, 1=Accessibility Disclosure, 2=Enable Service, 3=Battery, 4=MainApp
-// standby_reason: "overlay" | "accessibility" | ""
+// setup_step: 0=Overlay, 1=UsageStats Disclosure, 2=Enable UsageStats, 3=MainApp
+// standby_reason: "overlay" | "usagestats" | ""
 
 class MainActivity : ComponentActivity() {
 
@@ -45,12 +45,8 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        WorkManager.getInstance(this).enqueue(
-            PeriodicWorkRequestBuilder<ServiceMonitorWorker>(15, TimeUnit.MINUTES).build()
-        )
-
         setContent {
-            com.example.shortstop.ui.theme.ShortStopTheme(darkTheme = false) {
+            com.kamaluddin.shortstop.ui.theme.ShortStopTheme(darkTheme = false) {
                 MaterialTheme {
                     Surface(modifier = Modifier.fillMaxSize()) {
                         val step = remember { mutableStateOf(prefs.getInt("setup_step", 0)) }
@@ -65,7 +61,7 @@ class MainActivity : ComponentActivity() {
                                     prefs.edit().putInt("setup_step", 0).apply()
                                 }
                             )
-                            standbyReason.value == "accessibility" -> StandbyAccessibilityScreen(
+                            standbyReason.value == "usagestats" -> StandbyUsageStatsScreen(
                                 onEnableFocusMode = {
                                     standbyReason.value = ""
                                     prefs.edit().putString("standby_reason", "").apply()
@@ -87,39 +83,29 @@ class MainActivity : ComponentActivity() {
                                     standbyReason.value = "overlay"
                                 }
                             )
-                            step.value == 1 -> AccessibilityDisclosureScreen(
+                            step.value == 1 -> UsageStatsDisclosureScreen(
                                 onAgree = {
                                     prefs.edit().putInt("setup_step", 2).apply()
                                     step.value = 2
                                 },
                                 onDecline = {
-                                    prefs.edit().putString("standby_reason", "accessibility").apply()
-                                    standbyReason.value = "accessibility"
+                                    prefs.edit().putString("standby_reason", "usagestats").apply()
+                                    standbyReason.value = "usagestats"
                                 }
                             )
-                            step.value == 2 -> EnableServiceScreen(
+                            step.value == 2 -> EnableUsageStatsScreen(
                                 onContinue = {
-                                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                    startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
                                 }
                             )
-                            step.value == 3 -> BatteryOptimizationScreen(
-                                onOptimize = {
-                                    prefs.edit().putInt("setup_step", 4).apply()
-                                    step.value = 4
-                                    try {
-                                        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                                        intent.data = Uri.parse("package:$packageName")
-                                        startActivity(intent)
-                                    } catch (_: Exception) {
-                                        startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-                                    }
-                                },
-                                onSkip = {
-                                    prefs.edit().putInt("setup_step", 4).apply()
-                                    step.value = 4
+                            else -> {
+                                // Start service when we reach main screen
+                                LaunchedEffect(Unit) {
+                                    val serviceIntent = Intent(applicationContext, ShortStopService::class.java)
+                                    ContextCompat.startForegroundService(applicationContext, serviceIntent)
                                 }
-                            )
-                            else -> MainAppScreen()
+                                MainAppScreen()
+                            }
                         }
 
                         LaunchedEffect(Unit) {
@@ -133,7 +119,7 @@ class MainActivity : ComponentActivity() {
                                         prefs.edit().putInt("setup_step", 1).apply()
                                         step.value = 1
                                     }
-                                    2 -> if (isAccessibilityServiceEnabled()) {
+                                    2 -> if (hasUsageStatsPermission()) {
                                         prefs.edit().putInt("setup_step", 3).apply()
                                         step.value = 3
                                     }
@@ -150,9 +136,15 @@ class MainActivity : ComponentActivity() {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(this) else true
     }
 
-    private fun isAccessibilityServiceEnabled(): Boolean {
-        val enabledServices = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
-        return enabledServices.contains(packageName) && enabledServices.contains("ShortStopService")
+    private fun hasUsageStatsPermission(): Boolean {
+        val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), packageName)
+        } else {
+            @Suppress("DEPRECATION")
+            appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), packageName)
+        }
+        return mode == AppOpsManager.MODE_ALLOWED
     }
 }
 
@@ -208,10 +200,10 @@ fun OverlayPermissionScreen(onAgree: () -> Unit, onDecline: () -> Unit) {
     }
 }
 
-// ─── Step 1: Accessibility Disclosure (Play Store mandatory) ──────────────────
+// ─── Step 1: Usage Stats Disclosure ──────────────────────────────────────────
 
 @Composable
-fun AccessibilityDisclosureScreen(onAgree: () -> Unit, onDecline: () -> Unit) {
+fun UsageStatsDisclosureScreen(onAgree: () -> Unit, onDecline: () -> Unit) {
     BackHandler { onDecline() }
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(32.dp),
@@ -221,14 +213,14 @@ fun AccessibilityDisclosureScreen(onAgree: () -> Unit, onDecline: () -> Unit) {
         Text("🔒", style = MaterialTheme.typography.displayLarge)
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            "Mindful Usage Monitoring",
+            "App Usage Monitoring",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            "ShortStop uses the Accessibility Service to detect when you open a blocked app, then shows a 30-second pause screen to help you make a mindful choice.",
+            "ShortStop uses Android's Usage Stats permission to detect which app is in the foreground, then shows a 30-second pause screen to help you make a mindful choice.",
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center
         )
@@ -260,10 +252,10 @@ fun AccessibilityDisclosureScreen(onAgree: () -> Unit, onDecline: () -> Unit) {
     }
 }
 
-// ─── Step 2: Enable Service ───────────────────────────────────────────────────
+// ─── Step 2: Enable Usage Stats ───────────────────────────────────────────────
 
 @Composable
-fun EnableServiceScreen(onContinue: () -> Unit) {
+fun EnableUsageStatsScreen(onContinue: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -279,7 +271,7 @@ fun EnableServiceScreen(onContinue: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Enable ShortStop in Accessibility Settings to start monitoring.",
+            "Allow ShortStop to access app usage data so it can detect when you open a blocked app.",
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center
         )
@@ -293,64 +285,13 @@ fun EnableServiceScreen(onContinue: () -> Unit) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text("1. Tap 'Get Started' below")
                 Text("2. Find 'ShortStop' in the list")
-                Text("3. Toggle it ON")
-                Text("4. Confirm the permission")
-                Text("5. Return to this app")
+                Text("3. Toggle 'Permit usage access' ON")
+                Text("4. Return to this app")
             }
         }
         Spacer(modifier = Modifier.height(32.dp))
         Button(onClick = onContinue, modifier = Modifier.fillMaxWidth()) {
             Text("Get Started")
-        }
-        Spacer(modifier = Modifier.height(32.dp))
-    }
-}
-
-// ─── Step 3: Battery Optimization ────────────────────────────────────────────
-
-@Composable
-fun BatteryOptimizationScreen(onOptimize: () -> Unit, onSkip: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Spacer(modifier = Modifier.height(48.dp))
-        Text("⚡", style = MaterialTheme.typography.displayLarge)
-        Spacer(modifier = Modifier.height(24.dp))
-        Text(
-            "Keep ShortStop Running",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            "Android may stop ShortStop in the background to save battery. Disabling battery optimization ensures interventions work reliably 24/7.",
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("✅  Interventions work even after hours of inactivity")
-                Text("✅  Service won't be killed by the system")
-                Text("✅  Minimal extra battery usage")
-            }
-        }
-        Spacer(modifier = Modifier.height(32.dp))
-        Button(onClick = onOptimize, modifier = Modifier.fillMaxWidth()) {
-            Text("Disable Battery Optimization")
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        Button(
-            onClick = onSkip,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-        ) {
-            Text("Skip for Now")
         }
         Spacer(modifier = Modifier.height(32.dp))
     }
@@ -406,10 +347,10 @@ fun StandbyOverlayScreen(onEnableFocusMode: () -> Unit) {
     }
 }
 
-// ─── Standby: Accessibility declined ─────────────────────────────────────────
+// ─── Standby: Usage Stats declined ───────────────────────────────────────────
 
 @Composable
-fun StandbyAccessibilityScreen(onEnableFocusMode: () -> Unit) {
+fun StandbyUsageStatsScreen(onEnableFocusMode: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -442,7 +383,7 @@ fun StandbyAccessibilityScreen(onEnableFocusMode: () -> Unit) {
                 Text("• Your blocked app list is saved and ready")
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "Grant Accessibility permission to start monitoring and build your focus streak.",
+                    "Grant 'Usage access' permission to start monitoring and build your focus streak.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

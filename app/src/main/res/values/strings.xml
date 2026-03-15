@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">ShortStop</string>
-    <string name="accessibility_service_description">ShortStop uses accessibility services to detect rapid app switching and help you stay focused.</string>
+    <string name="usage_access_description">ShortStop requires Usage Access to detect when distracting apps are opened and trigger your focus timer.</string>
 </resources>

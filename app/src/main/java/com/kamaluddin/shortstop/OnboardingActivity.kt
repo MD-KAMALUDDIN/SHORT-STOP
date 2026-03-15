@@ -1,4 +1,4 @@
-package com.example.shortstop
+package com.kamaluddin.shortstop
 
 import android.content.Intent
 import android.os.Bundle

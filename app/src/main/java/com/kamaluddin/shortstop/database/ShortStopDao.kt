@@ -1,4 +1,4 @@
-package com.example.shortstop.database
+package com.kamaluddin.shortstop.database
 
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
