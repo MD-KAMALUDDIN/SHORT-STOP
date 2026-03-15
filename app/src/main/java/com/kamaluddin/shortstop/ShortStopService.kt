@@ -345,8 +345,6 @@ class ShortStopService : Service() {
         }
     }
 
-    }
-
     fun getCurrentApp(): String? = currentApp
 
     // ── Notification (required for foreground service) ───────────────────────
