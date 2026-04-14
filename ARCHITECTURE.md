@@ -24,7 +24,7 @@ ShortStop uses a layered architecture with clear separation of concerns:
                  ↓
 ┌─────────────────────────────────────┐
 │      System Services Layer          │
-│  AccessibilityService, Overlays     │
+│  UsageStatsManager, Overlays        │
 └─────────────────────────────────────┘
 ```
 
@@ -51,8 +51,8 @@ ShortStop uses a layered architecture with clear separation of concerns:
 
 ### 2. Service Layer
 
-**ShortStopService.kt** (AccessibilityService)
-- Monitors foreground app changes
+**ShortStopService.kt** (ForegroundService + UsageStatsManager)
+- Polls `UsageStatsManager` every second to detect foreground app
 - Detects blocked app usage
 - Triggers intervention overlays
 - Manages study mode blocking
@@ -60,9 +60,9 @@ ShortStop uses a layered architecture with clear separation of concerns:
 
 **Key Methods:**
 ```kotlin
-onAccessibilityEvent() // Detects app switches
-showInterventionOverlay() // Displays 30s overlay
-isAppBlocked() // Checks if app should be blocked
+getForegroundApp()       // Polls UsageStatsManager for current app
+onForegroundAppChanged() // Handles app switch logic
+showOverlay()            // Displays 30s intervention overlay
 ```
 
 ### 3. Data Layer
@@ -101,7 +101,7 @@ abstract class AppDatabase : RoomDatabase()
 ```
 User opens blocked app
         ↓
-AccessibilityService detects event
+UsageStatsManager poll detects foreground change
         ↓
 Check if app is in blocked list
         ↓
@@ -211,8 +211,8 @@ val timeSavedMinutes = (interventionCount * 0.5).toFloat()
 
 ### Data Storage
 
-- **Location**: `/data/data/com.example.shortstop/databases/`
-- **Encryption**: Android's default app sandbox
+- **Location**: `/data/data/com.kamaluddin.shortstop/databases/`
+- **Encryption**: SQLCipher AES-256 with key stored in Android Keystore
 - **Access**: Only accessible by ShortStop app
 - **Backup**: Disabled for privacy (can be enabled by user)
 
@@ -221,7 +221,7 @@ val timeSavedMinutes = (interventionCount * 0.5).toFloat()
 | Permission | Purpose | When Requested |
 |------------|---------|----------------|
 | SYSTEM_ALERT_WINDOW | Display overlays | Onboarding |
-| BIND_ACCESSIBILITY_SERVICE | Detect apps | Onboarding |
+| PACKAGE_USAGE_STATS | Detect foreground app | Onboarding |
 | POST_NOTIFICATIONS | Study mode alerts | Runtime (Android 13+) |
 | FOREGROUND_SERVICE | Keep service alive | Automatic |
 | VIBRATE | Haptic feedback | Automatic |
@@ -256,11 +256,11 @@ implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
 
 ```kotlin
 minSdk = 26  // Android 8.0
-targetSdk = 34  // Android 14
-compileSdk = 34
+targetSdk = 35  // Android 15
+compileSdk = 35
 
 kotlinOptions {
-    jvmTarget = "1.8"
+    jvmTarget = "17"
 }
 ```
 
@@ -298,7 +298,7 @@ kotlinOptions {
 
 ### Battery Optimization
 
-- **Minimal polling**: AccessibilityService is event-driven
+- **3-second polling**: UsageStatsManager queried every 3 seconds
 - **No wake locks**: Service only active when screen is on
 - **Efficient queries**: Room queries use indexes
 - **No background sync**: No network calls or periodic work
@@ -345,20 +345,27 @@ kotlinOptions {
 
 ```
 app/src/main/
-├── java/com/example/shortstop/
+├── java/com/kamaluddin/shortstop/
 │   ├── MainActivity.kt              # Entry point
 │   ├── MainAppScreen.kt             # Main UI
 │   ├── OnboardingActivity.kt        # First-time setup
-│   ├── ShortStopService.kt          # Accessibility service
-│   ├── AppDatabase.kt               # Room database
-│   ├── BlockedApp.kt                # Entity
-│   ├── UsageStats.kt                # Entity
-│   └── BootReceiver.kt              # Auto-start
+│   ├── ShortStopService.kt          # Foreground service (UsageStatsManager)
+│   ├── AppLogger.kt                 # Debug-only logging wrapper
+│   ├── SecurePreferences.kt         # EncryptedSharedPreferences helper
+│   ├── SessionGuard.kt              # Auth checks for sensitive operations
+│   ├── BootReceiver.kt              # Auto-start
+│   ├── InterventionOverlay.kt       # Overlay view
+│   └── database/
+│       ├── ShortStopDatabase.kt     # Room + SQLCipher setup
+│       ├── ShortStopDao.kt          # DAO interface
+│       ├── ShortStopRepository.kt   # Data access layer
+│       ├── UserStatsEntity.kt       # User stats table
+│       ├── BlockedAppEntity.kt      # Blocked apps table
+│       ├── AppUsageEntity.kt        # Per-app usage table
+│       └── HourlyInterventionEntity.kt
 ├── res/
 │   ├── raw/
 │   │   └── quotes.json              # 100 motivational quotes
-│   ├── xml/
-│   │   └── accessibility_service_config.xml
 │   └── mipmap/
 │       └── ic_launcher/             # App icon
 └── AndroidManifest.xml
@@ -383,5 +390,5 @@ app/src/main/
 
 ---
 
-**Last Updated**: March 2025  
-**Architecture Version**: 1.0
+**Last Updated**: July 2025  
+**Architecture Version**: 1.1

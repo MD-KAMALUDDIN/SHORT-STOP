@@ -5,10 +5,12 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
 
+import com.kamaluddin.shortstop.SecurePreferences
+
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
-            val prefs = context.getSharedPreferences("shortstop_prefs", Context.MODE_PRIVATE)
+            val prefs = SecurePreferences.get(context)
             val setupComplete = prefs.getInt("setup_step", 0) >= 3
             if (setupComplete) {
                 ContextCompat.startForegroundService(

@@ -2,28 +2,45 @@ package com.kamaluddin.shortstop.database
 
 import android.content.Context
 import com.google.gson.Gson
+import com.kamaluddin.shortstop.SessionGuard
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.OutputStream
 
-class ShortStopRepository(context: Context) {
-    
+class ShortStopRepository(private val context: Context) {
+
     private val database = ShortStopDatabase.getDatabase(context)
     val dao = database.dao()
+    private val pointsMutex = Mutex()
     
     val userStats: Flow<UserStatsEntity?> = dao.getUserStats()
     val blockedApps: Flow<List<BlockedAppEntity>> = dao.getBlockedApps()
     val studyApps: Flow<List<BlockedAppEntity>> = dao.getStudyApps()
     
     suspend fun updatePoints(points: Int) {
-        val current = dao.getUserStats().firstOrNull() ?: UserStatsEntity(
-            points = 0, currentStreak = 0, lastInterventionDate = "",
-            totalInterventions = 0, totalTimeSaved = 0, successfulStudySessions = 0, totalPointsEarned = 0
-        )
-        dao.updateUserStats(current.copy(points = points))
+        if (!SessionGuard.isAuthorized(context)) return
+        pointsMutex.withLock {
+            val current = dao.getUserStats().firstOrNull() ?: UserStatsEntity(
+                points = 0, currentStreak = 0, lastInterventionDate = "",
+                totalInterventions = 0, totalTimeSaved = 0, successfulStudySessions = 0, totalPointsEarned = 0
+            )
+            dao.updateUserStats(current.copy(points = current.points + points))
+        }
+    }
+
+    suspend fun deductPoints(amount: Int) {
+        if (!SessionGuard.isAuthorized(context)) return
+        pointsMutex.withLock {
+            val current = dao.getUserStats().firstOrNull() ?: return
+            val newPoints = (current.points - amount).coerceAtLeast(0)
+            dao.updateUserStats(current.copy(points = newPoints))
+        }
     }
     
     suspend fun recordIntervention(packageName: String, date: String) {
+        if (!SessionGuard.isAuthorized(context)) return
         val current = dao.getUserStats().firstOrNull() ?: UserStatsEntity(
             points = 0, currentStreak = 0, lastInterventionDate = "",
             totalInterventions = 0, totalTimeSaved = 0, successfulStudySessions = 0, totalPointsEarned = 0
@@ -54,6 +71,7 @@ class ShortStopRepository(context: Context) {
     }
     
     suspend fun toggleBlockedApp(packageName: String, isBlocked: Boolean) {
+        if (!SessionGuard.isAuthorized(context)) return
         if (isBlocked) {
             dao.insertBlockedApp(BlockedAppEntity(packageName, true, 0, 0, 0))
         } else {
@@ -67,24 +85,57 @@ class ShortStopRepository(context: Context) {
     }
     
     suspend fun setStudyMode(packageName: String, startTime: Long) {
+        if (!SessionGuard.isAuthorized(context)) return
         dao.updateStudyMode(packageName, true, startTime)
     }
     
     suspend fun clearStudyMode(packageName: String) {
+        if (!SessionGuard.isAuthorized(context)) return
         dao.updateStudyMode(packageName, false, 0L)
+        val current = dao.getUserStats().firstOrNull() ?: return
+        dao.updateUserStats(current.copy(
+            successfulStudySessions = current.successfulStudySessions + 1,
+            totalPointsEarned = current.totalPointsEarned + 5
+        ))
     }
-    
+
+    suspend fun addPendingRewards(points: Int) {
+        if (!SessionGuard.isAuthorized(context)) return
+
+        val current = dao.getUserStats().firstOrNull() ?: return
+
+        dao.updateUserStats(
+            current.copy(
+                pendingRewards = current.pendingRewards + points
+            )
+        )
+    }
+    suspend fun claimAllRewards() {
+        if (!SessionGuard.isAuthorized(context)) return
+        pointsMutex.withLock {
+            val current = dao.getUserStats().firstOrNull() ?: return
+            if (current.pendingRewards <= 0) return
+            dao.updateUserStats(current.copy(
+                points = current.points + current.pendingRewards,
+                totalPointsEarned = current.totalPointsEarned + current.pendingRewards,
+                pendingRewards = 0
+            ))
+        }
+    }
+
     suspend fun claimReward(points: Int, date: String) {
+        if (!SessionGuard.isAuthorized(context)) return
         val current = dao.getUserStats().firstOrNull() ?: UserStatsEntity(
             points = 0, currentStreak = 0, lastInterventionDate = "",
-            totalInterventions = 0, totalTimeSaved = 0, successfulStudySessions = 0, 
+            totalInterventions = 0, totalTimeSaved = 0, successfulStudySessions = 0,
             totalPointsEarned = 0, dailyExitCount = 0, lastRewardDate = ""
         )
-        
+
         val newExitCount = if (current.lastRewardDate == date) current.dailyExitCount + 1 else 1
-        
+
         dao.updateUserStats(current.copy(
             points = current.points + points,
+            totalPointsEarned = current.totalPointsEarned + points,
             dailyExitCount = newExitCount,
             lastRewardDate = date
         ))
@@ -106,6 +157,7 @@ class ShortStopRepository(context: Context) {
     }
     
     suspend fun exportData(outputStream: OutputStream) {
+        if (!SessionGuard.isAuthorized(context)) return
         val data = mapOf(
             "userStats" to dao.getUserStats().firstOrNull(),
             "blockedApps" to dao.getBlockedApps().firstOrNull(),

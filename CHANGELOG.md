@@ -5,7 +5,7 @@ All notable changes to ShortStop will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2025-03-XX (Upcoming)
+## [1.0.0] - 2025-07-14
 
 ### 🎉 Initial Release
 
@@ -27,11 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Technical
 - Kotlin with Jetpack Compose UI
-- Room database for local storage
-- AccessibilityService for app detection
+- Room database (SQLCipher encrypted) for local storage
+- ForegroundService + UsageStatsManager for app detection
 - ProGuard optimization for release builds
 - App Bundle splits for size optimization
-- Min SDK 26 (Android 8.0), Target SDK 34 (Android 14)
+- Min SDK 26 (Android 8.0), Target SDK 35 (Android 15)
 
 #### Privacy & Security
 - No internet permission

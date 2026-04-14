@@ -39,6 +39,9 @@ interface ShortStopDao {
     @Query("UPDATE blocked_apps SET isStudyMode = :isStudy, studyStartTime = :startTime WHERE packageName = :packageName")
     suspend fun updateStudyMode(packageName: String, isStudy: Boolean, startTime: Long)
     
+    @Query("UPDATE user_stats SET pendingRewards = :pending WHERE id = 1")
+    suspend fun updatePendingRewards(pending: Int)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHourlyIntervention(intervention: HourlyInterventionEntity)
     

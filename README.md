@@ -23,7 +23,7 @@ ShortStop is a privacy-first Android app that helps you build healthier phone ha
 ## 📱 Requirements
 
 - Android 8.0 (API 26) or higher
-- Accessibility Service permission (for app detection)
+- Usage Stats permission (for app detection)
 - Overlay permission (for intervention screens)
 
 ## 🚀 Installation
@@ -56,7 +56,7 @@ cd SHORT-STOP
 ## 🎯 How It Works
 
 1. **Select Apps**: Choose which apps distract you (TikTok, Instagram, YouTube, etc.)
-2. **Enable Service**: Grant accessibility permission for app detection
+2. **Grant Permissions**: Allow Usage Stats access and Display over other apps
 3. **Get Interrupted**: After 7 seconds on a blocked app, see a 30-second motivational overlay
 4. **Build Streaks**: Track your progress and climb the ranks from Novice to Legend
 
@@ -76,22 +76,22 @@ Your rank is calculated based on:
 
 - **Language**: Kotlin
 - **UI**: Jetpack Compose
-- **Database**: Room (SQLite)
-- **Service**: AccessibilityService for app detection
+- **Database**: Room (SQLite, SQLCipher encrypted)
+- **Service**: UsageStatsManager for app detection
 - **Min SDK**: 26 (Android 8.0)
-- **Target SDK**: 34 (Android 14)
+- **Target SDK**: 35 (Android 15)
 
 ### Key Components
 
 - `MainAppScreen.kt` - Main UI with Compose
-- `ShortStopService.kt` - Accessibility service for app monitoring
-- `AppDatabase.kt` - Room database for local storage
+- `ShortStopService.kt` - Foreground service using UsageStatsManager for app monitoring
+- `ShortStopDatabase.kt` - Room + SQLCipher encrypted database
 - `quotes.json` - 100 motivational quotes
 
 ### Permissions Used
 
 - `SYSTEM_ALERT_WINDOW` - Display intervention overlays
-- `BIND_ACCESSIBILITY_SERVICE` - Detect app usage
+- `PACKAGE_USAGE_STATS` - Detect foreground app (UsageStatsManager)
 - `FOREGROUND_SERVICE` - Keep monitoring active
 - `POST_NOTIFICATIONS` - Study mode notifications
 - `VIBRATE` - Haptic feedback
@@ -101,7 +101,7 @@ Your rank is calculated based on:
 
 ### Timing Constants
 
-Located in `MainAppScreen.kt`:
+Located in `ShortStopService.kt`:
 
 ```kotlin
 TRIGGER_THRESHOLD_MS = 7000L        // 7 seconds before intervention
@@ -128,7 +128,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 ### Test Checklist
 - [ ] App selection works
-- [ ] Accessibility service enables
+- [ ] Usage Stats permission granted
 - [ ] Overlay appears after 7 seconds
 - [ ] Study mode blocks apps for 25 minutes
 - [ ] Statistics update correctly

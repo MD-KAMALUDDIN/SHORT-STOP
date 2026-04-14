@@ -12,11 +12,12 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.util.Log
+import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
+import com.kamaluddin.shortstop.SecurePreferences
 import com.kamaluddin.shortstop.database.BlockedAppEntity
 import com.kamaluddin.shortstop.database.ShortStopRepository
 import kotlinx.coroutines.*
@@ -33,7 +34,7 @@ class ShortStopService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private val serviceScope = CoroutineScope(
         Dispatchers.Main + SupervisorJob() + CoroutineExceptionHandler { _, t ->
-            Log.e(TAG, "Coroutine error: ${t.message}", t)
+            AppLogger.e(TAG, "Coroutine error: ${t.message}", t)
         }
     )
 
@@ -55,7 +56,6 @@ class ShortStopService : Service() {
         val isServiceRunning: StateFlow<Boolean> = _isServiceRunning
 
         private const val TAG = "ShortStop"
-        private const val PREFS_NAME = "shortstop_prefs"
         private const val CHANNEL_ID = "shortstop_service"
         private const val NOTIFICATION_ID = 1
 
@@ -64,7 +64,7 @@ class ShortStopService : Service() {
         const val STUDY_MODE_DURATION_MS = 25 * 60 * 1000L
         const val COOLDOWN_PERIOD_MS = 3 * 60 * 1000L
 
-        private const val POLL_INTERVAL_MS = 1000L
+        private const val POLL_INTERVAL_MS = 3000L
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -89,7 +89,7 @@ class ShortStopService : Service() {
         }
 
         startPolling()
-        Log.d(TAG, "Service started")
+        AppLogger.d(TAG, "Service started")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -142,23 +142,26 @@ class ShortStopService : Service() {
         if (packageName.startsWith("com.android.") && !packageName.contains("youtube")) return
 
         val now = System.currentTimeMillis()
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val prefs = SecurePreferences.get(this)
         val blockedApps = blockedAppsList.map { it.packageName }.toSet()
         val studyApps = studyAppsList.map { it.packageName }.toSet()
 
         if (packageName != currentApp) {
-            Log.d(TAG, "App switched from '$currentApp' to '$packageName'")
+            AppLogger.d(TAG, "App switched from '$currentApp' to '$packageName'")
 
             stopMonitoring()
             hideOverlay()
             cancelTimers()
 
             if (currentApp != null && blockedApps.contains(currentApp)) {
+                AppLogger.d(TAG, "Exit recorded for $currentApp")
+
                 appLastExitTime[currentApp!!] = now
                 serviceScope.launch { repository.updateLastExitTime(currentApp!!, now) }
+
                 handler.postDelayed({
                     serviceScope.launch { checkAndRewardCleanExit(currentApp!!, prefs) }
-                }, 10 * 60 * 1000L)
+                }, 10 * 1000L) // (your test time)
             }
 
             accumulatedTime = if (!blockedApps.contains(packageName)) {
@@ -207,7 +210,7 @@ class ShortStopService : Service() {
                             repository.recordIntervention(packageName, today)
                             repository.incrementHourlyIntervention(currentHour)
                         } catch (e: Exception) {
-                            Log.e(TAG, "Failed to record intervention: ${e.message}")
+                            AppLogger.e(TAG, "Failed to record intervention")
                         }
                     }
                     showOverlay()
@@ -240,14 +243,14 @@ class ShortStopService : Service() {
                             repository.recordIntervention(pkg, today)
                             repository.incrementHourlyIntervention(currentHour)
                         } catch (e: Exception) {
-                            Log.e(TAG, "Failed to record intervention: ${e.message}")
+                            AppLogger.e(TAG, "Failed to record intervention")
                         }
                     }
                     if (currentApp == pkg) showOverlay()
                     blurRunnable = Runnable { hideOverlay() }
                     handler.postDelayed(blurRunnable!!, OVERLAY_DURATION_MS)
                 }
-                handler.postDelayed(this, 1000)
+                handler.postDelayed(this, POLL_INTERVAL_MS)
             }
         }
         handler.post(monitoringRunnable!!)
@@ -266,6 +269,10 @@ class ShortStopService : Service() {
 
     private fun showOverlay() {
         if (overlayView != null) return
+        if (!canDrawOverlays(this)) {
+            AppLogger.e(TAG, "Overlay permission not granted")
+            return
+        }
         try {
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -277,9 +284,9 @@ class ShortStopService : Service() {
 
             overlayView = InterventionOverlay(this, { hideOverlay() }, { handleEmergencyExit() })
             windowManager.addView(overlayView, params)
-            Log.d(TAG, "Overlay shown")
+            AppLogger.d(TAG, "Overlay shown")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to show overlay: ${e.message}", e)
+            AppLogger.e(TAG, "Failed to show overlay")
             overlayView = null
         }
     }
@@ -296,7 +303,7 @@ class ShortStopService : Service() {
                     }
                 }, 1000)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to hide overlay: ${e.message}", e)
+                AppLogger.e(TAG, "Failed to hide overlay")
             }
             overlayView = null
         }
@@ -310,12 +317,9 @@ class ShortStopService : Service() {
     private fun handleEmergencyExit() {
         serviceScope.launch {
             try {
-                val userStats = repository.userStats.first()
-                if (userStats != null && userStats.points >= 50) {
-                    repository.updatePoints(userStats.points - 50)
-                }
+                repository.deductPoints(50)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to apply emergency exit penalty: ${e.message}")
+                AppLogger.e(TAG, "Failed to apply emergency exit penalty")
             }
         }
         hideOverlay()
@@ -329,18 +333,14 @@ class ShortStopService : Service() {
                 val app = repository.dao.getBlockedApp(pkg) ?: return@launch
                 val exitTime = app.lastExitTime
                 val now = System.currentTimeMillis()
-                if (exitTime > 0 && (now - exitTime) >= 10 * 60 * 1000L) {
-                    val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
-                    val userStats = repository.userStats.first() ?: return@launch
-                    val dailyExitCount = if (userStats.lastRewardDate == today) userStats.dailyExitCount else 0
-                    val reward = when (dailyExitCount) { 0 -> 50; 1 -> 25; 2 -> 10; 3 -> 5; else -> 1 }
-                    val currentHour = java.text.SimpleDateFormat("yyyy-MM-dd-HH", java.util.Locale.getDefault()).format(java.util.Date())
-                    val multiplier = if (repository.getHourlyInterventionCount(currentHour) >= 5) 0.5 else 1.0
-                    repository.claimReward((reward * multiplier).toInt(), today)
+                AppLogger.d(TAG, "Checking reward for $pkg, elapsed=${now - exitTime}")
+                if (exitTime > 0 && (now - exitTime) >= 10 * 1000L) {
+                    AppLogger.d(TAG, "Reward triggered for $pkg")
+                    repository.addPendingRewards(10)
                     repository.updateLastExitTime(pkg, 0L)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to reward clean exit: ${e.message}")
+                AppLogger.e(TAG, "Failed to reward clean exit")
             }
         }
     }

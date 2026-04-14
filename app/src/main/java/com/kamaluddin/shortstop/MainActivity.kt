@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.isActive
 
 // setup_step: 0=Overlay, 1=UsageStats Disclosure, 2=Enable UsageStats, 3=MainApp
 // standby_reason: "overlay" | "usagestats" | ""
@@ -33,7 +34,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val prefs = getSharedPreferences("shortstop_prefs", Context.MODE_PRIVATE)
+        val prefs = SecurePreferences.get(this)
 
         if (!prefs.contains("is_early_adopter")) {
             prefs.edit().putBoolean("is_early_adopter", true).apply()
@@ -109,17 +110,17 @@ class MainActivity : ComponentActivity() {
                         }
 
                         LaunchedEffect(Unit) {
-                            while (true) {
+                            while (isActive) {
                                 kotlinx.coroutines.delay(1000)
                                 val currentStep = prefs.getInt("setup_step", 0)
                                 val currentStandby = prefs.getString("standby_reason", "") ?: ""
                                 if (currentStandby.isNotEmpty()) continue
                                 when (currentStep) {
-                                    0 -> if (canDrawOverlays()) {
+                                    0 -> if (canDrawOverlays(this@MainActivity)) {
                                         prefs.edit().putInt("setup_step", 1).apply()
                                         step.value = 1
                                     }
-                                    2 -> if (hasUsageStatsPermission()) {
+                                    2 -> if (hasUsageStatsPermission(this@MainActivity)) {
                                         prefs.edit().putInt("setup_step", 3).apply()
                                         step.value = 3
                                     }
@@ -135,40 +136,50 @@ class MainActivity : ComponentActivity() {
     private fun canDrawOverlays(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(this) else true
     }
-
-    private fun hasUsageStatsPermission(): Boolean {
-        val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), packageName)
-        } else {
-            @Suppress("DEPRECATION")
-            appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), packageName)
-        }
-        return mode == AppOpsManager.MODE_ALLOWED
-    }
 }
+
+fun canDrawOverlays(context: Context): Boolean =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(context) else true
 
 // ─── Step 0: Overlay Permission ───────────────────────────────────────────────
 
 @Composable
 fun OverlayPermissionScreen(onAgree: () -> Unit, onDecline: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    var waitingForUser by remember { mutableStateOf(false) }
+
+    // Auto-advance when the user returns from Settings with permission granted
+    LaunchedEffect(waitingForUser) {
+        while (waitingForUser) {
+            kotlinx.coroutines.delay(500)
+            if (canDrawOverlays(context)) {
+                onAgree()
+                break
+            }
+        }
+    }
+
     BackHandler { onDecline() }
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(48.dp))
-        Text("📱", style = MaterialTheme.typography.displayLarge)
+        Text(if (waitingForUser) "⏳" else "📱", style = MaterialTheme.typography.displayLarge)
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            "Display Over Other Apps",
+            if (waitingForUser) "Waiting for Permission…" else "Display Over Other Apps",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            "ShortStop needs permission to show a 30-second pause screen when you open a distracting app.",
+            if (waitingForUser)
+                "Enable 'Display over other apps' for ShortStop, then return here."
+            else
+                "ShortStop needs permission to show a 30-second pause screen when you open a distracting app.",
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center
         )
@@ -185,16 +196,24 @@ fun OverlayPermissionScreen(onAgree: () -> Unit, onDecline: () -> Unit) {
             }
         }
         Spacer(modifier = Modifier.height(32.dp))
-        Button(onClick = onAgree, modifier = Modifier.fillMaxWidth()) {
-            Text("I Agree — Grant Permission")
+        Button(
+            onClick = {
+                waitingForUser = true
+                onAgree()
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (waitingForUser) "Re-open Settings" else "I Agree — Grant Permission")
         }
         Spacer(modifier = Modifier.height(12.dp))
-        Button(
-            onClick = onDecline,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-        ) {
-            Text("No Thanks")
+        if (!waitingForUser) {
+            Button(
+                onClick = onDecline,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+            ) {
+                Text("No Thanks")
+            }
         }
         Spacer(modifier = Modifier.height(32.dp))
     }
@@ -256,22 +275,42 @@ fun UsageStatsDisclosureScreen(onAgree: () -> Unit, onDecline: () -> Unit) {
 
 @Composable
 fun EnableUsageStatsScreen(onContinue: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    //var permissionGranted by remember { mutableStateOf(false) }
+    var waitingForUser by remember { mutableStateOf(false) }
+
+    // Re-check every time the activity resumes (user returns from Settings)
+    LaunchedEffect(waitingForUser) {
+        if (!waitingForUser) return@LaunchedEffect
+
+        while (isActive) {
+            kotlinx.coroutines.delay(500)
+            if (hasUsageStatsPermission(context)) {
+                onContinue()
+                break
+            }
+        }
+    }
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(48.dp))
-        Text("⚙️", style = MaterialTheme.typography.displayLarge)
+        Text(if (waitingForUser) "⏳" else "⚙️", style = MaterialTheme.typography.displayLarge)
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            "One Last Step",
+            if (waitingForUser) "Waiting for Permission…" else "One Last Step",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Allow ShortStop to access app usage data so it can detect when you open a blocked app.",
+            if (waitingForUser)
+                "Enable 'Permit usage access' for ShortStop in the list, then return here."
+            else
+                "Allow ShortStop to access app usage data so it can detect when you open a blocked app.",
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center
         )
@@ -283,18 +322,35 @@ fun EnableUsageStatsScreen(onContinue: () -> Unit) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("How to enable:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("1. Tap 'Get Started' below")
+                Text("1. Tap 'Open Settings' below")
                 Text("2. Find 'ShortStop' in the list")
                 Text("3. Toggle 'Permit usage access' ON")
-                Text("4. Return to this app")
+                Text("4. Return to this app — it will continue automatically")
             }
         }
         Spacer(modifier = Modifier.height(32.dp))
-        Button(onClick = onContinue, modifier = Modifier.fillMaxWidth()) {
-            Text("Get Started")
+        Button(
+            onClick = {
+                waitingForUser = true
+                onContinue()
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (waitingForUser) "Re-open Settings" else "Open Settings")
         }
         Spacer(modifier = Modifier.height(32.dp))
     }
+}
+
+private fun hasUsageStatsPermission(context: Context): Boolean {
+    val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+    val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)
+    } else {
+        @Suppress("DEPRECATION")
+        appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)
+    }
+    return mode == AppOpsManager.MODE_ALLOWED
 }
 
 // ─── Standby: Overlay declined ───────────────────────────────────────────────

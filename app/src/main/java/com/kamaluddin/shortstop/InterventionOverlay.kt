@@ -30,7 +30,6 @@ class InterventionOverlay(context: Context, private val onDismiss: () -> Unit, p
         
         isClickable = true
         isFocusable = true
-        setOnTouchListener { _, _ -> true }
         
         // Haptic feedback when overlay appears
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

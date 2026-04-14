@@ -14,5 +14,6 @@ data class UserStatsEntity(
     val successfulStudySessions: Int,
     val totalPointsEarned: Int,
     val dailyExitCount: Int = 0,
-    val lastRewardDate: String = ""
+    val lastRewardDate: String = "",
+    val pendingRewards: Int = 0
 )

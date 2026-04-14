@@ -21,12 +21,14 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import kotlinx.coroutines.launch
 
+import com.kamaluddin.shortstop.SecurePreferences
+
 class OnboardingActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             OnboardingScreen {
-                getSharedPreferences("shortstop_prefs", MODE_PRIVATE)
+                SecurePreferences.get(this)
                     .edit()
                     .putBoolean("has_completed_onboarding", true)
                     .apply()
@@ -40,7 +42,7 @@ class OnboardingActivity : ComponentActivity() {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OnboardingScreen(onComplete: () -> Unit) {
-    val pagerState = rememberPagerState(pageCount = { 3 })
+    val pagerState = rememberPagerState(pageCount = { 4 })
     val scope = rememberCoroutineScope()
     
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF6200EE))) {
@@ -73,7 +75,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    repeat(3) { i ->
+                    repeat(4) { i ->
                         Box(
                             modifier = Modifier
                                 .size(if (pagerState.currentPage == i) 10.dp else 8.dp)
@@ -87,7 +89,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                 
                 Button(
                     onClick = {
-                        if (pagerState.currentPage == 2) {
+                        if (pagerState.currentPage == 3) {
                             onComplete()
                         } else {
                             scope.launch {
@@ -98,7 +100,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                     colors = ButtonDefaults.buttonColors(containerColor = Color.White)
                 ) {
                     Text(
-                        if (pagerState.currentPage == 2) "Get Started" else "Next",
+                        if (pagerState.currentPage == 3) "Get Started" else "Next",
                         color = Color(0xFF6200EE),
                         fontWeight = FontWeight.Bold
                     )
@@ -149,6 +151,39 @@ fun OnboardingPage(page: Int) {
                     "After the pause, you decide. Exit the app and earn reward points — or continue with full awareness that you made a mindful choice.",
                     fontSize = 16.sp,
                     color = Color.White.copy(alpha = 0.9f),
+                    textAlign = TextAlign.Center
+                )
+            }
+            3 -> {
+                Text("🔑", fontSize = 80.sp)
+                Spacer(modifier = Modifier.height(32.dp))
+                Text("Two Permissions Required", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White, textAlign = TextAlign.Center)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "ShortStop needs two special permissions to work. You'll be guided through both on the next screen.",
+                    fontSize = 16.sp,
+                    color = Color.White.copy(alpha = 0.9f),
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                androidx.compose.foundation.layout.Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.White.copy(alpha = 0.15f), androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("📱  Display over other apps", fontSize = 15.sp, color = Color.White, fontWeight = FontWeight.Medium)
+                    Text("Shows the 30-second pause screen on top of blocked apps.", fontSize = 13.sp, color = Color.White.copy(alpha = 0.8f))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("📊  Usage access", fontSize = 15.sp, color = Color.White, fontWeight = FontWeight.Medium)
+                    Text("Detects which app is in the foreground so interventions trigger at the right moment.", fontSize = 13.sp, color = Color.White.copy(alpha = 0.8f))
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "No data ever leaves your device.",
+                    fontSize = 14.sp,
+                    color = Color.White.copy(alpha = 0.7f),
                     textAlign = TextAlign.Center
                 )
             }
