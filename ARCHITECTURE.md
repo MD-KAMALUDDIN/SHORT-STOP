@@ -1,394 +1,276 @@
-# ShortStop Architecture
+# ShortStop — Architecture
 
 Technical architecture documentation for developers.
 
-## 📐 System Overview
+---
 
-ShortStop uses a layered architecture with clear separation of concerns:
-
-```
-┌─────────────────────────────────────┐
-│         UI Layer (Compose)          │
-│  MainAppScreen, OnboardingActivity  │
-└─────────────────────────────────────┘
-                 ↓
-┌─────────────────────────────────────┐
-│       Business Logic Layer          │
-│   State Management, Calculations    │
-└─────────────────────────────────────┘
-                 ↓
-┌─────────────────────────────────────┐
-│         Data Layer (Room)           │
-│  AppDatabase, DAOs, Entities        │
-└─────────────────────────────────────┘
-                 ↓
-┌─────────────────────────────────────┐
-│      System Services Layer          │
-│  UsageStatsManager, Overlays        │
-└─────────────────────────────────────┘
-```
-
-## 🏗️ Core Components
-
-### 1. UI Layer
-
-**MainAppScreen.kt** (Jetpack Compose)
-- Main dashboard with statistics
-- App selection and category management
-- Study mode controls
-- Settings overlay
-- Filter chips (All, Social Media, Entertainment, Other)
-
-**MainActivity.kt**
-- Entry point and theme configuration
-- Permission handling
-- Navigation to onboarding
-
-**OnboardingActivity.kt**
-- First-time user setup
-- Permission requests walkthrough
-- Feature introduction
-
-### 2. Service Layer
-
-**ShortStopService.kt** (ForegroundService + UsageStatsManager)
-- Polls `UsageStatsManager` every second to detect foreground app
-- Detects blocked app usage
-- Triggers intervention overlays
-- Manages study mode blocking
-- Handles cooldown periods
-
-**Key Methods:**
-```kotlin
-getForegroundApp()       // Polls UsageStatsManager for current app
-onForegroundAppChanged() // Handles app switch logic
-showOverlay()            // Displays 30s intervention overlay
-```
-
-### 3. Data Layer
-
-**AppDatabase.kt** (Room)
-```kotlin
-@Database(entities = [BlockedApp::class, UsageStats::class], version = 1)
-abstract class AppDatabase : RoomDatabase()
-```
-
-**Entities:**
-- `BlockedApp` - Apps selected for blocking with categories
-- `UsageStats` - Daily statistics (streak, time saved, etc.)
-
-**DAOs:**
-- `BlockedAppDao` - CRUD operations for blocked apps
-- `UsageStatsDao` - Statistics queries and updates
-
-### 4. Overlay System
-
-**InterventionOverlay**
-- Full-screen overlay with blur effect
-- Motivational quote display
-- 30-second countdown timer
-- Dismiss button (after countdown)
-
-**StudyModeOverlay**
-- Blocks apps during 25-minute study sessions
-- Shows remaining time
-- Emergency exit option
-
-## 🔄 Data Flow
-
-### App Blocking Flow
+## System Overview
 
 ```
-User opens blocked app
-        ↓
-UsageStatsManager poll detects foreground change
-        ↓
-Check if app is in blocked list
-        ↓
-Check cooldown period (3 min)
-        ↓
-Wait for trigger threshold (7 sec)
-        ↓
-Show intervention overlay (30 sec)
-        ↓
-Update statistics in database
-        ↓
-Start cooldown period
+┌─────────────────────────────────────────┐
+│           UI Layer (Compose)            │
+│  MainAppScreen, OnboardingActivity      │
+│  ShortStopViewModel (AndroidViewModel)  │
+└─────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────┐
+│         Repository Layer                │
+│  ShortStopRepository                    │
+│  getOrCreateUserStats() — row guarantee │
+└─────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────┐
+│         Data Layer (Room + SQLCipher)   │
+│  ShortStopDatabase (v9, AES-256)        │
+│  ShortStopDao (atomic SQL)              │
+│  4 entities                             │
+└─────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────┐
+│         System Services Layer           │
+│  ShortStopService (ForegroundService)   │
+│  UsageStatsManager polling every 3s     │
+│  WindowManager overlay                  │
+└─────────────────────────────────────────┘
 ```
-
-### Study Mode Flow
-
-```
-User starts study mode
-        ↓
-Set study mode flag = true
-        ↓
-Start 25-minute timer
-        ↓
-Block ALL selected apps
-        ↓
-Show notification with time remaining
-        ↓
-On app open attempt → Show study overlay
-        ↓
-Timer expires → End study mode
-        ↓
-Update study session count
-```
-
-## 📊 State Management
-
-### Compose State
-
-```kotlin
-// Main screen state
-var selectedApps by remember { mutableStateOf<List<BlockedApp>>(emptyList()) }
-var stats by remember { mutableStateOf<UsageStats?>(null) }
-var isStudyMode by remember { mutableStateOf(false) }
-var selectedCategory by remember { mutableStateOf("All") }
-
-// Derived state
-val filteredApps = selectedApps.filter { 
-    selectedCategory == "All" || it.category == selectedCategory 
-}
-```
-
-### Service State
-
-```kotlin
-// ShortStopService state
-private var lastBlockedApp: String? = null
-private var lastBlockTime: Long = 0
-private var isStudyModeActive = false
-private var studyModeStartTime: Long = 0
-```
-
-## 🎯 Key Algorithms
-
-### Rank Calculation
-
-```kotlin
-fun calculateRank(stats: UsageStats): String {
-    val score = (stats.streakDays * 10) + 
-                stats.timeSavedMinutes.toInt() + 
-                (stats.studySessions * 5) + 
-                (stats.interventions * 2)
-    
-    return when {
-        score < 50 -> "Novice"
-        score < 150 -> "Apprentice"
-        score < 300 -> "Journeyman"
-        score < 500 -> "Expert"
-        score < 800 -> "Master"
-        else -> "Legend"
-    }
-}
-```
-
-### Streak Tracking
-
-```kotlin
-fun updateStreak(lastActiveDate: String, currentDate: String): Int {
-    val daysDiff = calculateDaysDifference(lastActiveDate, currentDate)
-    
-    return when {
-        daysDiff == 0 -> currentStreak // Same day
-        daysDiff == 1 -> currentStreak + 1 // Next day
-        else -> 1 // Streak broken, reset
-    }
-}
-```
-
-### Time Saved Calculation
-
-```kotlin
-// Each intervention = 30 seconds saved
-// Assumes user would have spent at least 30s more on the app
-val timeSavedMinutes = (interventionCount * 0.5).toFloat()
-```
-
-## 🔐 Security & Privacy
-
-### Data Storage
-
-- **Location**: `/data/data/com.kamaluddin.shortstop/databases/`
-- **Encryption**: SQLCipher AES-256 with key stored in Android Keystore
-- **Access**: Only accessible by ShortStop app
-- **Backup**: Disabled for privacy (can be enabled by user)
-
-### Permissions Usage
-
-| Permission | Purpose | When Requested |
-|------------|---------|----------------|
-| SYSTEM_ALERT_WINDOW | Display overlays | Onboarding |
-| PACKAGE_USAGE_STATS | Detect foreground app | Onboarding |
-| POST_NOTIFICATIONS | Study mode alerts | Runtime (Android 13+) |
-| FOREGROUND_SERVICE | Keep service alive | Automatic |
-| VIBRATE | Haptic feedback | Automatic |
-
-### No Network Access
-
-- **No INTERNET permission** in manifest
-- **No network libraries** in dependencies
-- **All quotes stored locally** in `quotes.json`
-- **No crash reporting** or analytics
-
-## 📦 Dependencies
-
-### Core Libraries
-
-```kotlin
-// Jetpack Compose
-implementation("androidx.compose.ui:ui:1.5.4")
-implementation("androidx.compose.material3:material3:1.1.2")
-implementation("androidx.activity:activity-compose:1.8.1")
-
-// Room Database
-implementation("androidx.room:room-runtime:2.6.0")
-kapt("androidx.room:room-compiler:2.6.0")
-implementation("androidx.room:room-ktx:2.6.0")
-
-// Lifecycle
-implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
-```
-
-### Build Configuration
-
-```kotlin
-minSdk = 26  // Android 8.0
-targetSdk = 35  // Android 15
-compileSdk = 35
-
-kotlinOptions {
-    jvmTarget = "17"
-}
-```
-
-## 🧪 Testing Strategy
-
-### Manual Testing Checklist
-
-- [ ] App selection and deselection
-- [ ] Category filtering
-- [ ] Intervention overlay triggers after 7s
-- [ ] Overlay dismisses after 30s
-- [ ] Study mode blocks apps for 25 min
-- [ ] Statistics update correctly
-- [ ] Streak persists across days
-- [ ] Service survives app restart
-- [ ] Boot receiver starts service
-- [ ] Permissions handle gracefully
-
-### Test Scenarios
-
-1. **Cold Start**: Install → Onboarding → Enable service
-2. **App Blocking**: Open TikTok → Wait 7s → See overlay
-3. **Study Mode**: Start study → Try opening app → Blocked
-4. **Streak Test**: Use app daily → Check streak increments
-5. **Category Filter**: Select "Social Media" → See only social apps
-
-## 🚀 Performance Considerations
-
-### Memory Management
-
-- **Service**: Runs in foreground to prevent killing
-- **Database**: Queries run on background thread
-- **Overlays**: Removed from WindowManager when dismissed
-- **Compose**: Recomposition optimized with `remember` and `derivedStateOf`
-
-### Battery Optimization
-
-- **3-second polling**: UsageStatsManager queried every 3 seconds
-- **No wake locks**: Service only active when screen is on
-- **Efficient queries**: Room queries use indexes
-- **No background sync**: No network calls or periodic work
-
-### APK Size Optimization
-
-- **ProGuard**: Removes unused code
-- **Resource shrinking**: Removes unused resources
-- **App Bundle**: Splits by language, density, ABI
-- **No large assets**: Icon is vector, quotes are text
-
-## 🔧 Build Variants
-
-### Debug Build
-
-```bash
-./gradlew assembleDebug
-```
-- Logging enabled
-- No obfuscation
-- Debuggable
-- ~20 MB APK
-
-### Release Build
-
-```bash
-./gradlew assembleRelease
-```
-- Logging removed
-- ProGuard enabled
-- Obfuscated
-- ~15-18 MB APK
-
-### App Bundle
-
-```bash
-./gradlew bundleRelease
-```
-- Optimized for Play Store
-- Dynamic delivery
-- ~8-12 MB download
-
-## 📝 Code Organization
-
-```
-app/src/main/
-├── java/com/kamaluddin/shortstop/
-│   ├── MainActivity.kt              # Entry point
-│   ├── MainAppScreen.kt             # Main UI
-│   ├── OnboardingActivity.kt        # First-time setup
-│   ├── ShortStopService.kt          # Foreground service (UsageStatsManager)
-│   ├── AppLogger.kt                 # Debug-only logging wrapper
-│   ├── SecurePreferences.kt         # EncryptedSharedPreferences helper
-│   ├── SessionGuard.kt              # Auth checks for sensitive operations
-│   ├── BootReceiver.kt              # Auto-start
-│   ├── InterventionOverlay.kt       # Overlay view
-│   └── database/
-│       ├── ShortStopDatabase.kt     # Room + SQLCipher setup
-│       ├── ShortStopDao.kt          # DAO interface
-│       ├── ShortStopRepository.kt   # Data access layer
-│       ├── UserStatsEntity.kt       # User stats table
-│       ├── BlockedAppEntity.kt      # Blocked apps table
-│       ├── AppUsageEntity.kt        # Per-app usage table
-│       └── HourlyInterventionEntity.kt
-├── res/
-│   ├── raw/
-│   │   └── quotes.json              # 100 motivational quotes
-│   └── mipmap/
-│       └── ic_launcher/             # App icon
-└── AndroidManifest.xml
-```
-
-## 🔄 Future Architecture Improvements
-
-### Potential Enhancements
-
-1. **Repository Pattern**: Abstract data layer
-2. **ViewModel**: Separate UI state from Composables
-3. **Dependency Injection**: Use Hilt for cleaner dependencies
-4. **Modularization**: Split into feature modules
-5. **Testing**: Add unit and integration tests
-
-### Scalability Considerations
-
-- Current architecture supports up to 1000 blocked apps
-- Database queries optimized for <100ms response time
-- Service handles app switches with <50ms latency
-- UI remains responsive with 60fps target
 
 ---
 
-**Last Updated**: July 2025  
-**Architecture Version**: 1.1
+## Core Components
+
+### UI Layer
+
+**`ShortStopViewModel.kt`** (`AndroidViewModel`)
+- Single ViewModel owned by `MainActivity`
+- Holds the single `ShortStopRepository` instance
+- Exposes `userStats`, `blockedApps`, `studyApps` as Flows
+- All write actions: `toggleBlockedApp`, `activateStudyMode`, `claimAllRewards`, `exportData`, `resetAllData`
+- `resetAllData` stops service → clears DB → clears prefs → restarts activity
+
+**`MainAppScreen.kt`** (Jetpack Compose)
+- Receives `vm: ShortStopViewModel = viewModel()`
+- App list with category filtering and search
+- Claim rewards card, streak display, rank overlay, achievements
+- All child composables receive `vm` — no local repository creation
+
+**`MainActivity.kt`**
+- Onboarding flow: overlay permission → usage stats disclosure → enable usage stats → main screen
+- Permission polling loop (breaks once `setup_step >= 3`)
+- Starts `ShortStopService` when reaching main screen
+
+**`OnboardingActivity.kt`**
+- 4-page `HorizontalPager` explaining the app
+- Sets `has_completed_onboarding = true` on completion
+
+### Service Layer
+
+**`ShortStopService.kt`** (`ForegroundService`, type: `specialUse`)
+- Polls `UsageStatsManager.queryUsageStats()` every **3 seconds**
+- Detects foreground app changes via `maxByOrNull { lastTimeUsed }`
+- Triggers overlay after **7 continuous seconds** on a blocked app
+- Checks `cleanExitDeadline` timestamps on every poll tick
+- `START_STICKY` — Android restarts if killed
+- All state variables are `private` — no public mutable instance
+
+**Key state:**
+```kotlin
+private var currentApp: String?          // current foreground app
+private var accumulatedTime: Long        // ms spent on current app
+private var interventionTriggered: Boolean // prevents duplicate triggers
+private var monitoredPkg: String         // snapshot — never changes mid-session
+```
+
+**`InterventionOverlay.kt`** (`FrameLayout`)
+- System window via `WindowManager.TYPE_APPLICATION_OVERLAY`
+- `LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS` — covers notch/punch-hole
+- `canAffordExit: Boolean` — disables Emergency Exit button when points < 50
+- `ValueAnimator.ofFloat(1f, 0f)` over 30s — linear fade
+- 500ms haptic feedback on appearance
+
+### Data Layer
+
+**`ShortStopDatabase.kt`** (Room + SQLCipher 4.6.1)
+- `System.loadLibrary("sqlcipher")` before `SupportOpenHelperFactory`
+- `useLegacyPackaging = true` — `.so` stored uncompressed
+- Key: 32 random bytes, encrypted with AndroidKeyStore AES-256-GCM key
+- Encrypted key stored in `EncryptedSharedPreferences`
+- `@Volatile INSTANCE` singleton with double-checked locking
+- `clearInstance()` — closes and nulls for reset flow
+- `RoomDatabase.Callback.onCreate()` seeds `user_stats` row
+
+**`ShortStopRepository.kt`**
+- `getOrCreateUserStats()` — always returns a valid row, inserts default if missing
+- `pointsMutex: Mutex` — all read-modify-write operations are serialised
+- `addPendingRewards` / `claimAllRewards` — delegate to atomic SQL (no read needed)
+- `recordEmergencyExit()` — atomically deducts 50 pts AND increments `totalEmergencyExits`
+
+**`ShortStopDao.kt`**
+- `getUserStats()` → `Flow<UserStatsEntity?>` — for UI observation
+- `getUserStatsOnce()` → `suspend UserStatsEntity?` — for one-shot reads
+- `getBlockedAppsOnce()` → `suspend List<BlockedAppEntity>` — for one-shot reads
+- `addToPendingRewards(amount)` → `pendingRewards = pendingRewards + :amount`
+- `claimPendingRewards()` → single atomic SQL moving pending → points
+
+---
+
+## Data Flow
+
+### Intervention Flow
+
+```
+Poll tick (every 3s)
+    → getForegroundApp() via UsageStatsManager
+    → onForegroundAppChanged(pkg)
+    → if pkg != currentApp → stopMonitoring(), record exit, reset accumulatedTime
+    → if pkg is blocked → startMonitoring(pkg)
+    → monitoringRunnable polls every 3s
+    → accumulatedTime + elapsed >= 7s
+    → interventionTriggered = true (prevents duplicates)
+    → stopMonitoring() + resetSessionTime()
+    → recordIntervention() on IO thread
+    → triggerOverlay(pkg)
+    → overlayAutoHideRunnable fires after 30s
+    → removeOverlayView() + startMonitoring(pkg)
+```
+
+### Clean Exit Reward Flow
+
+```
+User exits blocked app
+    → updateLastExitTime(pkg, now)
+    → cleanExitDeadline = now + 10min stored in DB
+    → Every 3s poll tick calls checkPendingRewardDeadlines()
+    → if now >= cleanExitDeadline && isBlocked
+    → addPendingRewards(10)
+    → updateLastExitTime(pkg, 0L)  ← clears deadline
+```
+
+### Reset Flow
+
+```
+User taps "Delete Everything"
+    → SessionGuard.isAuthorized() check
+    → stopService()
+    → db.clearAllTables()
+    → ShortStopDatabase.clearInstance()
+    → prefs.edit().clear()
+    → startActivity(MainActivity, FLAG_ACTIVITY_CLEAR_TASK)
+```
+
+---
+
+## Rank Score Formula
+
+From `calculateRankScore()`:
+
+```kotlin
+score = (currentStreak × 25)
+      + (successfulStudySessions × 15)
+      + (totalTimeSaved / 60000 / 5)   // minutes saved ÷ 5
+      - (totalEmergencyExits × 20)
+score = max(score, 0)
+```
+
+| Score | Rank |
+|---|---|
+| < 100 | 🌱 Sprout |
+| 100–299 | 🔨 Apprentice |
+| 300–749 | 🎯 Focused |
+| 750–1499 | 🧘 Monk |
+| 1500–2999 | ⚔️ Sentinel |
+| 3000+ | 👑 Sovereign |
+
+---
+
+## Timer Architecture
+
+| Timer | Type | Duration | Survives kill |
+|---|---|---|---|
+| Polling | Handler loop | 3s | ❌ |
+| Monitoring | Handler loop | 3s | ❌ |
+| Overlay auto-hide | Handler one-shot | 30s | ❌ |
+| Study end | Handler one-shot | remaining | ❌ (studyStartTime in DB ✅) |
+| Clean exit reward | DB timestamp poll | 10 min | ✅ |
+| Cooldown | DB timestamp check | 3 min | ✅ |
+
+---
+
+## Security Architecture
+
+```
+AndroidKeyStore
+    → AES-256-GCM key (alias: shortstop_db_key)
+    → Encrypts 32-byte random passphrase
+    → Encrypted passphrase stored in EncryptedSharedPreferences
+    → Passphrase passed to SupportOpenHelperFactory
+    → SQLCipher encrypts entire DB file with AES-256
+```
+
+- No plaintext key material ever stored on disk
+- `EncryptedSharedPreferences`: AES256-SIV key encryption, AES256-GCM value encryption
+- `SessionGuard.isAuthorized()`: checks `has_completed_onboarding && setup_step >= 3`
+- `AppLogger`: sanitizes `\n`/`\r` to prevent log injection; `d()` stripped in release
+
+---
+
+## Database Schema (version 9)
+
+### Migrations
+
+| Version | Change |
+|---|---|
+| 1 → 2 | Added `isStudyMode`, `studyStartTime` to `blocked_apps` |
+| 2 → 3 | Created `hourly_interventions` |
+| 3 → 4 | Added `dailyExitCount`, `lastRewardDate` to `user_stats` |
+| 4 → 5 | Added `pendingRewards` to `user_stats` |
+| 5 → 6 | Removed `totalInterventions`, `totalTimeSaved` from `blocked_apps` |
+| 6 → 7 | Removed `dailyExitCount`, `lastRewardDate` from `user_stats` |
+| 7 → 8 | Added `cleanExitDeadline` to `blocked_apps` |
+| 8 → 9 | Added `totalEmergencyExits` to `user_stats` |
+
+---
+
+## Build Configuration
+
+```kotlin
+minSdk     = 26   // Android 8.0
+targetSdk  = 35   // Android 15
+compileSdk = 35
+jvmTarget  = "17"
+
+// ABI splits
+abiFilters = ["arm64-v8a", "x86_64", "armeabi-v7a"]
+
+// SQLCipher .so must be uncompressed
+jniLibs.useLegacyPackaging = true
+```
+
+---
+
+## File Structure
+
+```
+app/src/main/java/com/kamaluddin/shortstop/
+├── MainActivity.kt              — onboarding + permission flow
+├── MainAppScreen.kt             — entire Compose UI
+├── OnboardingActivity.kt        — first-time setup
+├── ShortStopViewModel.kt        — AndroidViewModel, owns repository
+├── ShortStopService.kt          — foreground service, overlay logic
+├── InterventionOverlay.kt       — system window overlay view
+├── AppLogger.kt                 — logging wrapper
+├── SecurePreferences.kt         — EncryptedSharedPreferences singleton
+├── SessionGuard.kt              — auth guard for sensitive ops
+├── BootReceiver.kt              — auto-start after reboot
+└── database/
+    ├── ShortStopDatabase.kt     — Room + SQLCipher, migrations 1→9
+    ├── ShortStopDao.kt          — DAO with atomic SQL
+    ├── ShortStopRepository.kt   — data access, mutex-protected writes
+    ├── UserStatsEntity.kt       — user_stats table (v9)
+    ├── BlockedAppEntity.kt      — blocked_apps table
+    ├── AppUsageEntity.kt        — app_usage table
+    └── HourlyInterventionEntity.kt — hourly_interventions table
+```
+
+---
+
+**Last Updated**: Based on current codebase (DB version 9)

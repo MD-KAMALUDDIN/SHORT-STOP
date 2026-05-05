@@ -1,165 +1,98 @@
-# ShortStop - Play Store Listing Copy
-
-## SHORT DESCRIPTION (80 characters max)
-```
-Break free from phone addiction. Block distracting apps with smart interventions.
-```
-*Character count: 79*
+# ShortStop — Play Store Listing
 
 ---
 
-## FULL DESCRIPTION (4000 characters max)
+## SHORT DESCRIPTION (80 characters max)
 
 ```
-🛡️ TAKE BACK CONTROL OF YOUR TIME
+Break phone addiction with smart 30-second interventions. 100% offline.
+```
 
-ShortStop helps you break free from endless scrolling and phone addiction. Using psychology-backed interventions, ShortStop gives you the power to reclaim your attention and live more intentionally.
+---
+
+## FULL DESCRIPTION
+
+```
+🛑 TAKE BACK CONTROL OF YOUR TIME
+
+ShortStop helps you break free from endless scrolling and phone addiction. When you open a distracting app, ShortStop gives you a 30-second pause to reflect before you fall into the scroll trap.
 
 📱 HOW IT WORKS
 
-1. Choose which apps distract you most (social media, games, etc.)
-2. After 7 seconds in a blocked app, ShortStop shows a 30-second reflection screen
-3. Use this moment to decide: continue mindfully or do something better
-4. Build streaks, earn points, and watch your digital wellness improve
+1. Toggle ON the apps that distract you (TikTok, Instagram, YouTube, etc.)
+2. Use your phone normally
+3. Open a blocked app → after 7 seconds, a full-screen motivational overlay appears
+4. The overlay fades over 30 seconds — you cannot skip it without a penalty
+5. Stay away for 10 minutes → earn reward points
+6. Build streaks, climb ranks, reclaim your time
 
 ✨ KEY FEATURES
 
 🎯 SMART INTERVENTIONS
-• 7-second trigger catches mindless scrolling
-• 30-second pause creates pattern interrupt
-• Psychology-backed timing for real behavior change
-• Emergency exit available (with point penalty)
+• 7-second trigger catches mindless scrolling before it starts
+• 30-second pause creates a real pattern interrupt
+• Cooldown system — re-opening within 3 minutes triggers instant overlay
+• Emergency Exit available only if you have 50+ points (costs 50 pts)
 
 📚 STUDY MODE
-• Need social media for work? Activate 25-minute Pomodoro sessions
-• Costs 50 points - encourages intentional use
-• Perfect for research, networking, or legitimate tasks
+• Need a blocked app for work? Activate 25-minute focused sessions
+• Costs 50 points — encourages intentional use
+• Completing a session awards 5 points directly to your balance
 
-🏆 GAMIFICATION THAT WORKS
-• Earn points for clean exits and maintaining streaks
-• Unlock achievements as you progress
-• Rank system from "🌱 Getting Started" to "👑 Ultimate Controller"
-• Track interventions, time saved, and study sessions
+🏆 MEANINGFUL GAMIFICATION
+• Earn points: +10 for clean exits, +10 daily streak bonus, +5 study sessions
+• Spend points: Emergency Exit (−50), Study Mode (−50)
+• Emergency exits REDUCE your rank score — real consequences
+• 6 ranks: 🌱 Sprout → 🔨 Apprentice → 🎯 Focused → 🧘 Monk → ⚔️ Sentinel → 👑 Sovereign
 
-📊 DETAILED STATISTICS
-• See total interventions and time saved
-• Monitor your current streak
-• Track successful study sessions
-• Export your data anytime
+📊 RANK SCORE FORMULA
+score = (streak × 25) + (study sessions × 15) + (minutes saved ÷ 5) − (emergency exits × 20)
 
-💪 MOTIVATIONAL SUPPORT
-• 100+ inspiring quotes built-in
-• Daily motivation to keep you going
-• No internet required - works completely offline
+🔒 PRIVACY FIRST — ZERO DATA COLLECTION
+• No internet permission — physically cannot make network calls
+• No tracking, no analytics, no crash reporting
+• All data encrypted with AES-256 (SQLCipher + AndroidKeyStore)
+• 100% offline — all quotes stored locally
+• Export or delete your data anytime
 
-🔒 PRIVACY FIRST
-• Zero data collection - everything stays on your device
-• No tracking, no analytics, no ads
-• No internet permission - completely offline
-• Open about accessibility service usage
+⚙️ RELIABLE BY DESIGN
+• Foreground service with specialUse type — no 6-hour timeout
+• Reward timers stored as DB timestamps — survive device reboots
+• Boot receiver restarts service automatically after reboot
+• Battery optimization prompt on first launch
 
-🎨 BEAUTIFUL DESIGN
-• Clean, modern Material Design 3 interface
-• Smooth animations and intuitive navigation
-• Light theme optimized for readability
-• Adaptive icon for Android 8+
-
-⚙️ POWERFUL FEATURES
-• Unlimited app blocking (no limits!)
-• Categorized app list (Games, Productivity, etc.)
-• Search functionality to find apps quickly
-• Undo blocking with 3-second grace period
-• Battery optimization guidance
-• Survives device reboots
-• Help section with FAQ
-
-🧠 PSYCHOLOGY-BACKED APPROACH
-
-ShortStop isn't about punishment - it's about awareness. The 7-second trigger catches you before you fall into the scroll trance. The 30-second intervention gives you time to reflect and make a conscious choice. This pattern interrupt is proven to break automatic behaviors.
-
-🎓 PERFECT FOR:
-• Students fighting procrastination
-• Professionals improving focus
-• Parents modeling healthy phone habits
-• Anyone wanting better digital wellness
-• People breaking social media addiction
-
-🚫 WHAT SHORTSTOP IS NOT:
-• Not a parental control app
-• Not a complete phone blocker
-• Not about restriction - about awareness
-• Not collecting your data
-
-💎 100% FREE - NO CATCHES
+💎 100% FREE — NO CATCHES
 • No ads, ever
 • No in-app purchases
 • No premium tiers
 • No data selling
-• No hidden costs
+• All features from day one
 
-All features unlocked from day one. We believe digital wellness should be accessible to everyone.
-
-🔧 HOW TO USE:
-
-1. Grant accessibility permission (required for app monitoring)
-2. Allow overlay permission (required for intervention screens)
-3. Select apps you want to block
-4. Start using your phone normally
-5. When you open a blocked app, ShortStop intervenes after 7 seconds
-6. Use the pause to reflect and make a conscious choice
-
-🛠️ TECHNICAL DETAILS:
+🛠️ TECHNICAL
 • Minimum Android 8.0 (API 26)
 • Uses Usage Stats permission for app monitoring
-• Requires overlay permission for interventions
+• Requires overlay permission for intervention screens
 • All processing happens locally on your device
-• No internet connection needed
-• Lightweight: ~15MB installed
-
-⭐ WHY CHOOSE SHORTSTOP?
-
-Unlike other app blockers that completely lock you out, ShortStop respects your autonomy. We give you a moment to pause and reflect, not a wall you can't climb. This approach builds real self-control, not just forced restriction.
-
-Our 3-minute cooldown prevents gaming the system - if you exit and re-enter within 3 minutes, the intervention shows immediately. This anti-cheat mechanism ensures you can't just "swipe away and reopen."
-
-Study Mode acknowledges that sometimes you need blocked apps for legitimate reasons. Spend 50 points for 25 minutes of uninterrupted access - perfect for when you need Instagram for work or Twitter for research.
-
-🌟 JOIN THE MOVEMENT
-
-Thousands of people are breaking free from phone addiction with ShortStop. Your future self will thank you for taking this step today.
-
-Download ShortStop now and start your journey to digital wellness. It's time to stop scrolling and start living.
+• Lightweight: ~15 MB installed
+```
 
 ---
 
-Questions? Feedback? Contact us through the in-app Help section.
+## WHAT'S NEW — Version 1.0
 
-#DigitalWellness #PhoneAddiction #Productivity #SelfControl #Mindfulness
 ```
-*Character count: 3,997*
+🎉 ShortStop v1.0
 
----
-
-## WHAT'S NEW (500 characters max)
-
-### Version 1.0 - Initial Release
-```
-🎉 Welcome to ShortStop v1.0!
-
-✨ Features:
 • Smart 7-second intervention trigger
-• 30-second reflection screens
+• 30-second motivational overlay
+• Emergency Exit disabled when balance < 50 pts
 • 25-minute Study Mode (Pomodoro)
-• Unlimited app blocking
-• Streak tracking & gamification
-• 100+ motivational quotes
-• Detailed statistics
-• Privacy-first (zero data collection)
-• Completely offline
-
-Break free from endless scrolling. Your digital wellness journey starts now! 🚀
+• Clean exit rewards (10 min away = +10 pts)
+• Daily streak bonus
+• 6-rank progression system (Sprout → Sovereign)
+• AES-256 encrypted database
+• 100% offline, zero data collection
 ```
-*Character count: 398*
 
 ---
 
@@ -168,54 +101,22 @@ Break free from endless scrolling. Your digital wellness journey starts now! �
 
 ---
 
-## TAGS/KEYWORDS
-```
-digital wellness, phone addiction, app blocker, screen time, productivity, focus, self control, mindfulness, social media detox, doomscrolling, time management, habit tracker, digital detox, distraction blocker, study mode
-```
-
----
-
 ## CONTENT RATING
-**Everyone** (suitable for all ages)
+**Everyone**
 
 ---
 
-## TARGET AUDIENCE
-- Age: 13+
-- Primary: 18-35 (students, young professionals)
-- Secondary: 35-50 (parents, professionals)
-
----
-
-## APP CATEGORY JUSTIFICATION
-**Productivity** - ShortStop helps users be more productive by reducing time wasted on distracting apps and improving focus.
-
----
-
-## PROMOTIONAL TEXT (Optional - 80 characters)
+## KEYWORDS
 ```
-Stop scrolling. Start living. Break phone addiction with smart interventions.
+digital wellness, phone addiction, app blocker, screen time, productivity, focus, self control, mindfulness, social media detox, doomscrolling, distraction blocker, study mode, pomodoro, habit tracker
 ```
-*Character count: 78*
 
 ---
 
-## COPY-PASTE READY FOR PLAY CONSOLE
+## NOTES FOR SUBMISSION
 
-**Short Description:**
-Break free from phone addiction. Block distracting apps with smart interventions.
-
-**Full Description:**
-[Copy the entire FULL DESCRIPTION section above]
-
-**What's New:**
-[Copy the Version 1.0 text above]
-
----
-
-## NOTES FOR SUBMISSION:
-1. Emphasize privacy-first approach in Data Safety form
-2. Check "No data collected" in all categories
-3. Mention accessibility service is for app monitoring only
-4. Highlight that app works completely offline
-5. Stress that it's 100% free with no monetization
+1. Service type is `specialUse` — include the `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` justification already in the manifest
+2. No data collection — select "This app doesn't collect or share any user data" in Data Safety
+3. No internet permission — confirm in Data Safety form
+4. Usage Stats permission explanation: used only to detect foreground app for intervention overlays, all processing local and real-time
+5. Privacy Policy URL: link to `PRIVACY_POLICY.md` in the repository

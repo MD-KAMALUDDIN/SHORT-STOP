@@ -2,119 +2,78 @@
 
 All notable changes to ShortStop will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [1.0.0] - 2025-07-14
+---
+
+## [1.0.0] - 2025
 
 ### 🎉 Initial Release
 
-#### Added
-- Smart intervention system with 7-second trigger threshold
-- 30-second motivational overlay with 100 local quotes
-- Study Mode with 25-minute focused sessions
-- App blocking for Social Media, Entertainment, and Other categories
-- Progress tracking: streaks, time saved, study sessions, interventions
-- Rank progression system (😔 Struggling Beginner → 👑 Ultimate Controller)
-- Category filter with "All" option
-- Statistics dashboard with vertical StatCard layout
-- Onboarding flow with permission setup
-- Settings panel with customization options
-- 100% offline functionality with local quote system
-- Privacy-first architecture with zero data collection
-- Custom app icon with breaking chain design
-- Light theme UI with Material Design 3
+#### Core Features
+- Smart intervention system — 7-second trigger, 30-second motivational overlay
+- Emergency Exit button disabled when balance < 50 pts — must wait full 30 seconds
+- Study Mode — 25-minute uninterrupted access (costs 50 pts, awards 5 pts on completion)
+- Clean exit reward — stay away 10 minutes from a blocked app → +10 pts pending
+- Daily streak bonus — first intervention of the day → +10 pts pending
+- Pending rewards system — rewards accumulate, manually claimed from home screen
+- Cooldown — re-opening a blocked app within 3 minutes triggers instant overlay
 
-#### Technical
-- Kotlin with Jetpack Compose UI
-- Room database (SQLCipher encrypted) for local storage
-- ForegroundService + UsageStatsManager for app detection
-- ProGuard optimization for release builds
-- App Bundle splits for size optimization
-- Min SDK 26 (Android 8.0), Target SDK 35 (Android 15)
+#### Rank System
+- Formula: `(streak × 25) + (studySessions × 15) + (timeSavedMinutes / 5) - (emergencyExits × 20)`
+- 6 ranks: 🌱 Sprout → 🔨 Apprentice → 🎯 Focused → 🧘 Monk → ⚔️ Sentinel → 👑 Sovereign
+- Emergency exits penalise rank score (−20 per exit)
 
-#### Privacy & Security
-- No internet permission
-- No third-party services
-- No analytics or tracking
-- All data stored locally
-- GDPR and CCPA compliant
+#### Architecture
+- ViewModel (`AndroidViewModel`) + Repository + Room pattern
+- Single `ShortStopRepository` instance owned by ViewModel
+- All Flows observed via `collectAsState` — no local repository creation in Composables
+- `getOrCreateUserStats()` guarantees single `user_stats` row always exists
+- `pointsMutex` serialises all read-modify-write DB operations
+- Atomic SQL for `addToPendingRewards` and `claimPendingRewards`
+- `recordEmergencyExit()` atomically deducts points and increments counter
 
-### 🐛 Bug Fixes (Pre-release)
-- Fixed rank calculation formula (interventions now add points instead of subtract)
-- Fixed StatCard number wrapping on narrow screens
-- Fixed category header visibility with "All" filter
-- Restored missing `isServiceEnabled()` function
-- Removed unused network imports
+#### Security
+- SQLCipher AES-256 encrypted database (`sqlcipher-android:4.6.1`)
+- AndroidKeyStore-backed encryption key — never leaves hardware
+- DB passphrase encrypted with Keystore key, stored in `EncryptedSharedPreferences`
+- `System.loadLibrary("sqlcipher")` + `useLegacyPackaging = true` for Samsung compatibility
+- No internet permission — physically cannot make network calls
 
-### 🔧 Optimizations
-- ProGuard with 5 optimization passes
-- Logging removal in release builds
-- Resource shrinking enabled
-- App Bundle splits for language, density, and ABI
-- Expected APK size: 15-18 MB
-- Expected Play Store download: 8-12 MB
+#### Service
+- Foreground service type: `specialUse` — no 6-hour timeout
+- `START_STICKY` — Android restarts if killed
+- `BootReceiver` (`exported=false`) — restarts after device reboot
+- All reward timers converted to DB timestamps — survive service kills and reboots
+- `cleanExitDeadline` checked on every 3-second poll tick
+- No public mutable service instance — state exposed only via `StateFlow`
+
+#### Overlay
+- `LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS` — covers notch/punch-hole (API 28+)
+- `FLAG_LAYOUT_IN_SCREEN` + `FLAG_LAYOUT_NO_LIMITS` — true full-screen
+- Dark mode aware — adapts background and text colors
+- `canAffordExit` parameter — disables/greys Emergency Exit when balance < 50
+
+#### Database
+- Schema version 9
+- 4 tables: `user_stats`, `blocked_apps`, `app_usage`, `hourly_interventions`
+- 8 migrations (1→9)
+- `cleanExitDeadline` in `blocked_apps` — timestamp-based reward timer
+- `totalEmergencyExits` in `user_stats` — feeds rank penalty formula
+
+#### Privacy
+- Zero data collection — nothing leaves the device
+- No analytics, no crash reporting, no tracking
+- All motivational quotes stored locally in `quotes.json`
+- Export data as JSON (user-initiated, requires authorization)
+- Reset wipes all tables, closes DB singleton, clears prefs, restarts to onboarding
 
 ---
 
-## Version History
+## Planned (Future Versions)
 
-### Versioning Scheme
-
-- **Major (X.0.0)**: Breaking changes, major features
-- **Minor (1.X.0)**: New features, backwards compatible
-- **Patch (1.0.X)**: Bug fixes, minor improvements
-
-### Planned Features (Future Versions)
-
-#### v1.1.0 (Potential)
-- Custom intervention duration settings
 - Custom trigger threshold settings
-- Export/import statistics
-- Weekly/monthly reports
-- Custom quote additions
+- Schedule-based blocking (block during work hours)
+- Weekly/monthly statistics reports
+- Dark theme
 - Widget support
-
-#### v1.2.0 (Potential)
-- Schedule-based blocking (e.g., block during work hours)
-- App usage time limits
-- Daily goals and challenges
-- Achievement system
-- Dark theme option (if requested)
-
-#### v2.0.0 (Potential)
-- Complete UI redesign
-- Advanced analytics
-- Habit tracking integration
-- Focus session templates
-- Parental controls
-
----
-
-## Release Notes Template
-
-```markdown
-## [X.Y.Z] - YYYY-MM-DD
-
-### Added
-- New features
-
-### Changed
-- Changes to existing functionality
-
-### Deprecated
-- Soon-to-be removed features
-
-### Removed
-- Removed features
-
-### Fixed
-- Bug fixes
-
-### Security
-- Security improvements
-```
-
----
-
-**Note**: This changelog will be updated with each release. Check back for the latest changes!

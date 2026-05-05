@@ -84,10 +84,11 @@ Describe:
 
 All contributions must maintain:
 
-- **No data collection** - Nothing leaves the device
-- **No internet usage** - App stays 100% offline
-- **No third-party services** - No analytics or tracking
-- **Local-only storage** - All data in Room database
+- **No data collection** — Nothing leaves the device
+- **No internet usage** — App stays 100% offline
+- **No third-party services** — No analytics or tracking
+- **Local-only storage** — All data in Room + SQLCipher database
+- **No public mutable service state** — Expose state via Flow only
 
 ## 📋 Pull Request Checklist
 
