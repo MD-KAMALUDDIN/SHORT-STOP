@@ -1,4 +1,4 @@
-package com.kamaluddin.shortstop
+﻿package com.kamaluddin.shortstop
 
 import android.app.AppOpsManager
 import android.content.Context
@@ -124,6 +124,7 @@ class MainActivity : ComponentActivity() {
                                         prefs.edit().putInt("setup_step", 3).apply()
                                         step.value = 3
                                     }
+                                    else -> break
                                 }
                             }
                         }
@@ -276,8 +277,6 @@ fun UsageStatsDisclosureScreen(onAgree: () -> Unit, onDecline: () -> Unit) {
 @Composable
 fun EnableUsageStatsScreen(onContinue: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
-
-    //var permissionGranted by remember { mutableStateOf(false) }
     var waitingForUser by remember { mutableStateOf(false) }
 
     // Re-check every time the activity resumes (user returns from Settings)

@@ -13,25 +13,75 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 
-class InterventionOverlay(context: Context, private val onDismiss: () -> Unit, private val onEmergencyExit: () -> Unit) : FrameLayout(context) {
-    
-    private val messageView: TextView
+class InterventionOverlay(
+    context: Context,
+    private val canAffordExit: Boolean,
+    private val onDismiss: () -> Unit,
+    private val onEmergencyExit: () -> Unit
+) : FrameLayout(context) {
 
     init {
-        val isDarkMode = (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
-        
+        val isDarkMode = (context.resources.configuration.uiMode and
+                android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                android.content.res.Configuration.UI_MODE_NIGHT_YES
+
         val bgColor = if (isDarkMode) "#C0FFFFFF" else "#C0000000"
         val textColor = if (isDarkMode) "#333333" else "#FFFFFF"
-        val containerBg = if (isDarkMode) "#FFFFFF" else "#1E1E1E"
-        
+
         setBackgroundColor(Color.parseColor(bgColor))
-        alpha = 1f
-        
         isClickable = true
         isFocusable = true
-        
-        // Haptic feedback when overlay appears
+
+        vibrate(context)
+
+        val container = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.CENTER
+            }
+            setPadding(80, 80, 80, 80)
+            background = ContextCompat.getDrawable(
+                context,
+                if (isDarkMode) android.R.drawable.dialog_holo_light_frame
+                else android.R.drawable.dialog_holo_dark_frame
+            )
+        }
+
+        val messageView = TextView(context).apply {
+            textSize = 28f
+            setTextColor(Color.parseColor(textColor))
+            gravity = Gravity.CENTER
+            text = getRandomMessage()
+            setPadding(0, 0, 0, 40)
+        }
+
+        val emergencyButton = Button(context).apply {
+            text = if (canAffordExit) "🚨 Emergency Exit (-50 pts)" else "🚫 Need 50 pts to exit early"
+            setBackgroundColor(Color.parseColor(if (canAffordExit) "#FF5252" else "#888888"))
+            setTextColor(Color.WHITE)
+            textSize = 16f
+            setPadding(40, 20, 40, 20)
+            isEnabled = canAffordExit
+            alpha = if (canAffordExit) 1f else 0.5f
+            setOnClickListener { if (canAffordExit) onEmergencyExit() }
+        }
+
+        container.addView(messageView)
+        container.addView(emergencyButton)
+        addView(container)
+
+        ValueAnimator.ofFloat(1f, 0f).apply {
+            duration = 30000
+            interpolator = LinearInterpolator()
+            addUpdateListener { alpha = it.animatedValue as Float }
+            start()
+        }
+    }
+
+    private fun vibrate(context: Context) {
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
         } else {
@@ -44,65 +94,15 @@ class InterventionOverlay(context: Context, private val onDismiss: () -> Unit, p
             @Suppress("DEPRECATION")
             vibrator.vibrate(500)
         }
-
-        val container = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
-                gravity = Gravity.CENTER
-            }
-            setBackgroundColor(Color.parseColor(containerBg))
-            setPadding(80, 80, 80, 80)
-            if (isDarkMode) {
-                background = context.getDrawable(android.R.drawable.dialog_holo_light_frame)
-            } else {
-                background = context.getDrawable(android.R.drawable.dialog_holo_dark_frame)
-            }
-        }
-
-        messageView = TextView(context).apply {
-            textSize = 28f
-            setTextColor(Color.parseColor(textColor))
-            gravity = Gravity.CENTER
-            text = getRandomMessage()
-            setPadding(0, 0, 0, 40)
-        }
-
-        val emergencyButton = Button(context).apply {
-            text = "🚨 Emergency Exit"
-            setBackgroundColor(Color.parseColor("#FF5252"))
-            setTextColor(Color.WHITE)
-            textSize = 16f
-            setPadding(40, 20, 40, 20)
-            setOnClickListener {
-                onEmergencyExit()
-            }
-        }
-
-        container.addView(messageView)
-        container.addView(emergencyButton)
-        addView(container)
-        
-        ValueAnimator.ofFloat(1f, 0f).apply {
-            duration = 30000
-            interpolator = LinearInterpolator()
-            addUpdateListener { animation ->
-                alpha = animation.animatedValue as Float
-            }
-            start()
-        }
     }
-    
-    private fun getRandomMessage(): String {
-        val messages = listOf(
-            "Break the loop.\nPut the phone down.",
-            "Is this really how you\nwant to spend your time?",
-            "You've been here a while.\nTake a break.",
-            "Cool down.\nYour goals are waiting.",
-            "Step away.\nYour future self will thank you.",
-            "Pause.\nWhat matters more right now?",
-            "Time to refocus.\nYou've got this."
-        )
-        return messages.random()
-    }
+
+    private fun getRandomMessage(): String = listOf(
+        "Break the loop.\nPut the phone down.",
+        "Is this really how you\nwant to spend your time?",
+        "You've been here a while.\nTake a break.",
+        "Cool down.\nYour goals are waiting.",
+        "Step away.\nYour future self will thank you.",
+        "Pause.\nWhat matters more right now?",
+        "Time to refocus.\nYou've got this."
+    ).random()
 }

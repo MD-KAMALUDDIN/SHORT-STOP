@@ -12,8 +12,7 @@ data class BlockedAppEntity(
     @PrimaryKey val packageName: String,
     val isBlocked: Boolean,
     val lastExitTime: Long,
-    val totalInterventions: Int,
-    val totalTimeSaved: Long,
     val isStudyMode: Boolean = false,
-    val studyStartTime: Long = 0L
+    val studyStartTime: Long = 0L,
+    val cleanExitDeadline: Long = 0L  // epoch ms when clean-exit reward fires; 0 = not pending
 )

@@ -6,11 +6,11 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import net.zetetic.database.sqlcipher.SQLiteDatabase
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
+import com.kamaluddin.shortstop.SecurePreferences
 @Database(
     entities = [UserStatsEntity::class, BlockedAppEntity::class, AppUsageEntity::class, HourlyInterventionEntity::class],
-    version = 5,
+    version = 9,
     exportSchema = false
 )
 abstract class ShortStopDatabase : RoomDatabase() {
@@ -23,6 +23,7 @@ abstract class ShortStopDatabase : RoomDatabase() {
         
         fun getDatabase(context: Context): ShortStopDatabase {
             return INSTANCE ?: synchronized(this) {
+                System.loadLibrary("sqlcipher")
                 val passphrase = getOrCreateDbKey(context)
                 val factory = SupportOpenHelperFactory(passphrase)
                 val instance = Room.databaseBuilder(
@@ -30,11 +31,30 @@ abstract class ShortStopDatabase : RoomDatabase() {
                     ShortStopDatabase::class.java,
                     "shortstop_database"
                 )
-                //.openHelperFactory(factory)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .openHelperFactory(factory)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                .addCallback(object : RoomDatabase.Callback() {
+                    override fun onCreate(db: SupportSQLiteDatabase) {
+                        super.onCreate(db)
+                        db.execSQL(
+                            """INSERT OR IGNORE INTO user_stats
+                               (id, points, currentStreak, lastInterventionDate,
+                                totalInterventions, totalTimeSaved, successfulStudySessions,
+                                totalPointsEarned, pendingRewards)
+                               VALUES (1, 0, 0, '', 0, 0, 0, 0, 0)"""
+                        )
+                    }
+                })
                 .build()
                 INSTANCE = instance
                 instance
+            }
+        }
+
+        fun clearInstance() {
+            synchronized(this) {
+                INSTANCE?.close()
+                INSTANCE = null
             }
         }
 
@@ -60,7 +80,7 @@ abstract class ShortStopDatabase : RoomDatabase() {
             }
             // Derive a stable 32-byte passphrase by encrypting a fixed nonce with the Keystore key
             val secretKey = (keyStore.getEntry(keyAlias, null) as java.security.KeyStore.SecretKeyEntry).secretKey
-            val prefs = context.getSharedPreferences("shortstop_db_meta", Context.MODE_PRIVATE)
+            val prefs = SecurePreferences.get(context)
             val ivB64 = prefs.getString("db_iv", null)
             val encB64 = prefs.getString("db_enc", null)
             if (ivB64 != null && encB64 != null) {
@@ -113,6 +133,67 @@ abstract class ShortStopDatabase : RoomDatabase() {
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE user_stats ADD COLUMN pendingRewards INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+        // v5→6: removed totalInterventions and totalTimeSaved from blocked_apps
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE blocked_apps_new (
+                        packageName TEXT NOT NULL PRIMARY KEY,
+                        isBlocked INTEGER NOT NULL,
+                        lastExitTime INTEGER NOT NULL,
+                        isStudyMode INTEGER NOT NULL DEFAULT 0,
+                        studyStartTime INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+                db.execSQL("""
+                    INSERT INTO blocked_apps_new (packageName, isBlocked, lastExitTime, isStudyMode, studyStartTime)
+                    SELECT packageName, isBlocked, lastExitTime, isStudyMode, studyStartTime FROM blocked_apps
+                """)
+                db.execSQL("DROP TABLE blocked_apps")
+                db.execSQL("ALTER TABLE blocked_apps_new RENAME TO blocked_apps")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_blocked_apps_packageName ON blocked_apps(packageName)")
+            }
+        }
+        // v6→7: removed dailyExitCount and lastRewardDate from user_stats
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE user_stats_new (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        points INTEGER NOT NULL DEFAULT 0,
+                        currentStreak INTEGER NOT NULL DEFAULT 0,
+                        lastInterventionDate TEXT NOT NULL DEFAULT '',
+                        totalInterventions INTEGER NOT NULL DEFAULT 0,
+                        totalTimeSaved INTEGER NOT NULL DEFAULT 0,
+                        successfulStudySessions INTEGER NOT NULL DEFAULT 0,
+                        totalPointsEarned INTEGER NOT NULL DEFAULT 0,
+                        pendingRewards INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+                db.execSQL("""
+                    INSERT INTO user_stats_new
+                        (id, points, currentStreak, lastInterventionDate, totalInterventions,
+                         totalTimeSaved, successfulStudySessions, totalPointsEarned, pendingRewards)
+                    SELECT id, points, currentStreak, lastInterventionDate, totalInterventions,
+                           totalTimeSaved, successfulStudySessions, totalPointsEarned, pendingRewards
+                    FROM user_stats
+                """)
+                db.execSQL("DROP TABLE user_stats")
+                db.execSQL("ALTER TABLE user_stats_new RENAME TO user_stats")
+            }
+        }
+        // v7→8: added cleanExitDeadline to blocked_apps
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE blocked_apps ADD COLUMN cleanExitDeadline INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+        // v8→9: added totalEmergencyExits to user_stats
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE user_stats ADD COLUMN totalEmergencyExits INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

@@ -12,11 +12,7 @@ android {
         applicationId = "com.kamaluddin.shortstop"
         minSdk = 26
         targetSdk = 35
-        versionCode = run {
-            val code = 1L
-            require(code in 1L..Int.MAX_VALUE.toLong()) { "versionCode $code out of valid range" }
-            code.toInt()
-        }
+        versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -73,7 +69,11 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
         jniLibs {
-            useLegacyPackaging = false
+            // Must be true — SQLCipher's native .so files must be extracted to the
+            // filesystem at install time. Setting false keeps them compressed inside
+            // the APK, which causes UnsatisfiedLinkError on Samsung and other OEM
+            // devices whose linkers cannot dlopen() compressed libraries.
+            useLegacyPackaging = true
         }
     }
 }
@@ -82,6 +82,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")
     implementation("androidx.activity:activity-compose:1.8.2")
     implementation(platform("androidx.compose:compose-bom:2024.02.00"))
     implementation("androidx.compose.ui:ui")

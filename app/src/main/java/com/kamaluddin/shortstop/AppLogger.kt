@@ -1,16 +1,20 @@
 package com.kamaluddin.shortstop
 
 import android.util.Log
-import com.kamaluddin.shortstop.BuildConfig
 
 object AppLogger {
+    private fun String.sanitize() = replace("\n", "").replace("\r", "")
+
     fun d(tag: String, msg: String) {
-        if (BuildConfig.DEBUG) Log.d(tag, msg)
+        if (BuildConfig.DEBUG) Log.d(tag.sanitize(), msg.sanitize())
+    }
+
+    fun w(tag: String, msg: String) {
+        Log.w(tag.sanitize(), msg.sanitize())
     }
 
     fun e(tag: String, msg: String, t: Throwable? = null) {
-        if (BuildConfig.DEBUG) {
-            if (t != null) Log.e(tag, msg, t) else Log.e(tag, msg)
-        }
+        if (t != null) Log.e(tag.sanitize(), msg.sanitize(), t)
+        else Log.e(tag.sanitize(), msg.sanitize())
     }
 }

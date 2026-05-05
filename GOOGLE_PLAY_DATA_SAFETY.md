@@ -53,21 +53,20 @@ All features work 100% offline with locally bundled content.
 
 ---
 
-## ⚡ ACCESSIBILITY SERVICE DECLARATION
+## ⚡ USAGE STATS PERMISSION DECLARATION
 
-In the "Accessibility" section of the Play Console:
+In the "App content" section of the Play Console:
 
-**Why does your app use Accessibility Service?**
-Select: **Other**
+**Why does your app use Usage Stats permission?**
 
 **Provide a detailed explanation:**
 ```
-ShortStop uses the Accessibility Service API to monitor which apps the user is currently using. This is required to:
+ShortStop uses the PACKAGE_USAGE_STATS permission to monitor which app is currently in the foreground. This is required to:
 1. Detect when the user opens a blocked app
 2. Display intervention overlay screens to help users manage their screen time
 3. Track usage statistics locally on the device
 
-The Accessibility Service is used ONLY for app usage monitoring. We do NOT:
+The permission is used ONLY for app usage monitoring. We do NOT:
 - Access content within apps
 - Read text, passwords, or sensitive information
 - Transmit any data off the device
@@ -76,14 +75,6 @@ The Accessibility Service is used ONLY for app usage monitoring. We do NOT:
 All data processing happens locally and in real-time on the user's device.
 ```
 
-**Upload a video demonstration:**
-- Record a 30-60 second video showing:
-  1. User enabling the accessibility service
-  2. User selecting an app to block
-  3. User opening that app
-  4. Intervention overlay appearing
-  5. User dismissing or using emergency exit
-
 ---
 
 ## 🚀 FINAL CHECKLIST BEFORE SUBMISSION
@@ -91,11 +82,11 @@ All data processing happens locally and in real-time on the user's device.
 - [ ] AndroidManifest.xml has NO `<uses-permission android:name="android.permission.INTERNET"/>`
 - [ ] Data Safety form shows "This app doesn't collect or share any user data"
 - [ ] Privacy Policy URL is provided and accessible
-- [ ] Accessibility Service explanation is detailed and accurate
-- [ ] Video demonstration of accessibility service is uploaded
+- [ ] Usage Stats permission explanation is detailed and accurate
 - [ ] App version is set to 1.0 (versionCode 1, versionName "1.0")
 - [ ] All screenshots show the app working offline
 - [ ] App description mentions "100% offline" and "privacy-first"
+- [ ] foregroundServiceType is set to "specialUse" with justification property
 
 ---
 

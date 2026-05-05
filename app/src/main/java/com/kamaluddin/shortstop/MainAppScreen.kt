@@ -1,4 +1,4 @@
-package com.kamaluddin.shortstop
+﻿package com.kamaluddin.shortstop
 
 import android.content.Context
 import android.content.Intent
@@ -30,24 +30,25 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 data class AppCategory(val name: String, val apps: List<ApplicationInfo>)
 
+private val defaultUserStats = com.kamaluddin.shortstop.database.UserStatsEntity()
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainAppScreen() {
+fun MainAppScreen(vm: ShortStopViewModel = viewModel()) {
     val context = LocalContext.current
     val prefs = remember { SecurePreferences.get(context) }
-    val repository = remember { com.kamaluddin.shortstop.database.ShortStopRepository(context) }
-
-    val userStats by repository.userStats.collectAsState(initial = null)
-    val blockedAppsList by repository.blockedApps.collectAsState(initial = emptyList())
+    val userStats by vm.userStats.collectAsState(initial = null)
+    val blockedAppsList by vm.blockedApps.collectAsState(initial = emptyList())
     val blockedApps = blockedAppsList.map { it.packageName }.toSet()
 
-
     var installedApps by remember { mutableStateOf<List<ApplicationInfo>>(emptyList()) }
+    var appCategories by remember { mutableStateOf<List<AppCategory>>(emptyList()) }
     var selectedCategory by remember { mutableStateOf("All") }
     var searchQuery by remember { mutableStateOf("") }
 
@@ -77,7 +78,6 @@ fun MainAppScreen() {
     }
 
     val snackbarHostState = remember { SnackbarHostState() }
-    var pendingToggle by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
 
 
 
@@ -85,15 +85,20 @@ fun MainAppScreen() {
 
     LaunchedEffect(Unit) {
         val pm = context.packageManager
-        installedApps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
-            .filter { (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0 || (it.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0 }
+        val apps = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            pm.getInstalledApplications(PackageManager.GET_META_DATA)
+                .filter { (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0 || (it.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0 }
+        }
+        installedApps = apps
+        appCategories = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            categorizeApps(apps, pm)
+        }
     }
 
     LaunchedEffect(userStats) {
+        if (userStats == null) return@LaunchedEffect  // wait for real DB row
         val hasInitialized = prefs.getBoolean("has_initialized_stats", false)
-
-        if (!hasInitialized && userStats != null) {
-            repository.updatePoints(100)
+        if (!hasInitialized) {
             prefs.edit().putBoolean("has_initialized_stats", true).apply()
         }
     }
@@ -136,11 +141,10 @@ fun MainAppScreen() {
                 }
             }
 
-            val categories = categorizeApps(installedApps, context.packageManager)
             val filteredByCategory = when (selectedCategory) {
-                "All" -> categories
+                "All" -> appCategories
                 "Selected" -> listOf(AppCategory("Selected Apps 📌", installedApps.filter { blockedApps.contains(it.packageName) }))
-                else -> categories.filter { it.name.contains(selectedCategory) }
+                else -> appCategories.filter { it.name.contains(selectedCategory) }
             }
 
             val filteredCategories = if (searchQuery.isNotEmpty()) {
@@ -158,7 +162,7 @@ fun MainAppScreen() {
 
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 item {
-                    ClaimRewardsCard(prefs)
+                    ClaimRewardsCard(vm, userStats ?: defaultUserStats)
                 }
 
                 item {
@@ -236,8 +240,9 @@ fun MainAppScreen() {
                         }
                         items(category.apps, key = { it.packageName }) { app ->
                             val scope = rememberCoroutineScope()
-                            AppItemWithStudy(app, blockedApps.contains(app.packageName), userStats?.points ?:0, context, repository, blockedApps.size) { pkg, blocked ->
-                                pendingToggle = Pair(pkg, blocked)
+                            AppItemWithStudy(app, blockedApps.contains(app.packageName), userStats?.points ?: 0, vm) { pkg, blocked ->
+                                // Write immediately so DB is always consistent
+                                vm.toggleBlockedApp(pkg, blocked)
                                 scope.launch {
                                     val result = snackbarHostState.showSnackbar(
                                         message = if (blocked) "App blocked" else "App unblocked",
@@ -245,12 +250,7 @@ fun MainAppScreen() {
                                         duration = SnackbarDuration.Short
                                     )
                                     if (result == SnackbarResult.ActionPerformed) {
-                                        pendingToggle = null
-                                    } else {
-                                        pendingToggle?.let {
-                                            repository.toggleBlockedApp(it.first, it.second)
-                                            pendingToggle = null
-                                        }
+                                        vm.toggleBlockedApp(pkg, !blocked)
                                     }
                                 }
                             }
@@ -271,15 +271,15 @@ fun MainAppScreen() {
         }
         if (showStats) {
             androidx.activity.compose.BackHandler { showStats = false }
-            StatsOverlay(userStats) { showStats = false }
+            StatsOverlay(userStats ?: defaultUserStats) { showStats = false }
         }
         if (showRank) {
             androidx.activity.compose.BackHandler { showRank = false }
-            RankOverlay(userStats, prefs) { showRank = false }
+            RankOverlay(userStats ?: defaultUserStats) { showRank = false }
         }
         if (showAchievements) {
             androidx.activity.compose.BackHandler { showAchievements = false }
-            AchievementsOverlay(userStats, prefs) { showAchievements = false }
+            AchievementsOverlay(userStats ?: defaultUserStats, vm) { showAchievements = false }
         }
         if (showHelp) {
             androidx.activity.compose.BackHandler { showHelp = false }
@@ -287,7 +287,7 @@ fun MainAppScreen() {
         }
         if (showSettings) {
             androidx.activity.compose.BackHandler { showSettings = false }
-            SettingsOverlay { showSettings = false }
+            SettingsOverlay(vm) { showSettings = false }
         }
 
 
@@ -387,12 +387,8 @@ fun MenuButton(label: String, icon: ImageVector, iconColor: Color = Color.White,
 }
 
 @Composable
-fun ClaimRewardsCard(prefs: android.content.SharedPreferences) {
-    val context = LocalContext.current
-    val repository = remember { com.kamaluddin.shortstop.database.ShortStopRepository(context) }
-    val userStats by repository.userStats.collectAsState(initial = null)
-    val pendingRewards = userStats?.pendingRewards ?: 0
-    val scope = rememberCoroutineScope()
+fun ClaimRewardsCard(vm: ShortStopViewModel, userStats: com.kamaluddin.shortstop.database.UserStatsEntity) {
+    val pendingRewards = userStats.pendingRewards
     var showClaimDialog by remember { mutableStateOf(false) }
 
     if (pendingRewards > 0) {
@@ -429,11 +425,7 @@ fun ClaimRewardsCard(prefs: android.content.SharedPreferences) {
             text = { Text("You earned $pendingRewards points for staying away from blocked apps!") },
             confirmButton = {
                 Button(onClick = {
-                    scope.launch {
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                            repository.claimAllRewards()
-                        }
-                    }
+                    vm.claimAllRewards()
                     showClaimDialog = false
                 }) {
                     Text("Awesome!")
@@ -444,71 +436,56 @@ fun ClaimRewardsCard(prefs: android.content.SharedPreferences) {
 }
 
 @Composable
-fun AppItemWithStudy(app: ApplicationInfo, isBlocked: Boolean, currentPoints: Int, @Suppress("UNUSED_PARAMETER") context: Context, repository: com.kamaluddin.shortstop.database.ShortStopRepository, @Suppress("UNUSED_PARAMETER") blockedCount: Int, onToggle: (String, Boolean) -> Unit) {
+fun AppItemWithStudy(app: ApplicationInfo, isBlocked: Boolean, currentPoints: Int, vm: ShortStopViewModel, onToggle: (String, Boolean) -> Unit) {
     val localContext = LocalContext.current
-    var checked by remember { mutableStateOf(isBlocked) }
-    LaunchedEffect(isBlocked) { checked = isBlocked }
     var showStudyDialog by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-
-    val studyApps by repository.studyApps.collectAsState(initial = emptyList())
-    val studyApp = studyApps.find { it.packageName == app.packageName }
-    val isStudyActive = studyApp?.isStudyMode == true &&
-                        studyApp.studyStartTime > 0 &&
-                        (System.currentTimeMillis() - studyApp.studyStartTime) < ShortStopService.STUDY_MODE_DURATION_MS
-
+    val studyApps by vm.studyApps.collectAsState(initial = emptyList())
+    val appLabel by produceState(initialValue = app.packageName.substringAfterLast("."), app.packageName) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            app.loadLabel(localContext.packageManager).toString()
+        }
+    }
+    val appIcon by produceState<androidx.compose.ui.graphics.ImageBitmap?>(initialValue = null, app.packageName) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            app.loadIcon(localContext.packageManager).toBitmap().asImageBitmap()
+        }
+    }
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
         Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                val icon = app.loadIcon(localContext.packageManager).toBitmap().asImageBitmap()
-                Image(bitmap = icon, contentDescription = null, modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)))
+                Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp))) {
+                    if (appIcon != null) Image(bitmap = appIcon!!, contentDescription = null, modifier = Modifier.fillMaxSize())
+                }
                 Spacer(modifier = Modifier.width(12.dp))
-                Text(app.loadLabel(localContext.packageManager).toString(), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                Switch(
-                    checked = checked,
-                    onCheckedChange = { newValue ->
-                        checked = newValue
-                        onToggle(app.packageName, newValue)
-                    }
-                )
+                Text(appLabel, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Switch(checked = isBlocked, onCheckedChange = { onToggle(app.packageName, it) })
             }
-
-            if (checked) {
+            if (isBlocked) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
                     onClick = { showStudyDialog = true },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = currentPoints >= 50,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF4CAF50)
-                    )
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
                 ) {
                     Text("Study Mode 25min (50 pts)")
                 }
             }
         }
     }
-
     if (showStudyDialog) {
         AlertDialog(
             onDismissRequest = { showStudyDialog = false },
-            title = { Text("📚 Study Mode") },
-            text = { Text("Activate 25-minute Pomodoro session for ${app.loadLabel(localContext.packageManager)}? This will cost 50 points.") },
+            title = { Text("ðŸ“š Study Mode") },
+            text = { Text("Activate 25-minute Pomodoro session for $appLabel? This will cost 50 points.") },
             confirmButton = {
                 Button(onClick = {
-                    scope.launch {
-                        repository.deductPoints(50)
-                        repository.setStudyMode(app.packageName, System.currentTimeMillis())
-                    }
+                    vm.activateStudyMode(app.packageName)
                     showStudyDialog = false
-                }) {
-                    Text("Activate")
-                }
+                }) { Text("Activate") }
             },
             dismissButton = {
-                TextButton(onClick = { showStudyDialog = false }) {
-                    Text("Cancel")
-                }
+                TextButton(onClick = { showStudyDialog = false }) { Text("Cancel") }
             }
         )
     }
@@ -547,12 +524,12 @@ fun MotivationOverlay(onDismiss: () -> Unit) {
 }
 
 @Composable
-fun StatsOverlay(userStats: com.kamaluddin.shortstop.database.UserStatsEntity?, onDismiss: () -> Unit) {
-    val interventions = userStats?.totalInterventions ?: 0
-    val timeSaved = userStats?.totalTimeSaved ?: 0L
-    val studySessions = userStats?.successfulStudySessions ?: 0
-    val streak = userStats?.currentStreak ?: 0
-    val points = userStats?.points ?: 0
+fun StatsOverlay(userStats: com.kamaluddin.shortstop.database.UserStatsEntity, onDismiss: () -> Unit) {
+    val interventions = userStats.totalInterventions
+    val timeSaved = userStats.totalTimeSaved
+    val studySessions = userStats.successfulStudySessions
+    val streak = userStats.currentStreak
+    val points = userStats.points
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)).clickable { onDismiss() }) {
         Card(modifier = Modifier.align(Alignment.Center).padding(24.dp).fillMaxWidth(0.95f).verticalScroll(rememberScrollState()), colors = CardDefaults.cardColors(containerColor = Color.White)) {
@@ -645,33 +622,66 @@ fun StatCard(title: String, value: String, icon: String, color: Color) {
 }
 
 @Composable
-fun RankOverlay(userStats: com.kamaluddin.shortstop.database.UserStatsEntity?, prefs: android.content.SharedPreferences, onDismiss: () -> Unit) {
+fun RankOverlay(userStats: com.kamaluddin.shortstop.database.UserStatsEntity, onDismiss: () -> Unit) {
     val score = calculateRankScore(userStats)
     val rank = getRankFromScore(score)
     val rankColor = getRankColor(score)
     val (nextRank, nextThreshold) = getNextRankThreshold(score)
     val progress = if (nextThreshold > 0) (score.toFloat() / nextThreshold).coerceIn(0f, 1f) else 1f
-    @Suppress("UNUSED_VARIABLE", "ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE", "unused")
-    val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
-    @Suppress("UNUSED_VARIABLE", "ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE", "unused")
-    val dailyExitCount = prefs.getInt("daily_exit_count_$today", 0)
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)).clickable { onDismiss() }) {
-        Card(modifier = Modifier.align(Alignment.Center).padding(24.dp).fillMaxWidth(0.95f).verticalScroll(rememberScrollState()), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-            Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("🏆 Your Rank", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(24.dp))
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Top bar
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.primary,
+                shadowElevation = 4.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Close", tint = Color.White)
+                    }
+                    Text(
+                        "🏆 Your Rank",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+            }
 
+            // Scrollable content
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Current rank card
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = rankColor.copy(alpha = 0.1f)),
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(20.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(rank, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = rankColor)
+                        Text(rank, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = rankColor)
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("Score: $score", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     }
@@ -713,19 +723,60 @@ fun RankOverlay(userStats: com.kamaluddin.shortstop.database.UserStatsEntity?, p
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(24.dp))
 
-                        Text("How to Earn Points", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("How to Earn Score", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(12.dp))
 
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E8))
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                PointEarnRow("✅ Clean exit (10 min away)", "50\u00A0pts")
-                                PointEarnRow("🔥 Daily streak bonus", "10\u00A0pts/day")
-                                PointEarnRow("📚 Complete study session", "5\u00A0pts")
+                                PointEarnRow("🔥 Streak day", "+25\u00A0score")
+                                PointEarnRow("📚 Study session", "+15\u00A0score")
+                                PointEarnRow("⏱️ 5 min saved", "+1\u00A0score")
+                                PointEarnRow("🚨 Emergency exit", "−20\u00A0score")
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        Text("All Ranks", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        listOf(
+                            Triple("🌱 Sprout",     "0 – 99",       Color(0xFF8BC34A)),
+                            Triple("🔨 Apprentice", "100 – 299",    Color(0xFF2196F3)),
+                            Triple("🎯 Focused",    "300 – 749",    Color(0xFF9C27B0)),
+                            Triple("🧘 Monk",       "750 – 1499",   Color(0xFF009688)),
+                            Triple("⚔️ Sentinel",  "1500 – 2999",  Color(0xFFFF9800)),
+                            Triple("👑 Sovereign",  "3000+",        Color(0xFFFFD700))
+                        ).forEach { (rankName, range, color) ->
+                            val isCurrent = getRankFromScore(score) == rankName
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isCurrent) color.copy(alpha = 0.15f) else Color(0xFFF5F5F5)
+                                ),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        rankName,
+                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isCurrent) color else Color.DarkGray,
+                                        fontSize = 15.sp
+                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(range, fontSize = 13.sp, color = Color.Gray)
+                                        if (isCurrent) Text("← you", fontSize = 12.sp, color = color, fontWeight = FontWeight.Bold)
+                                    }
+                                }
                             }
                         }
                     }
@@ -735,20 +786,27 @@ fun RankOverlay(userStats: com.kamaluddin.shortstop.database.UserStatsEntity?, p
                         colors = CardDefaults.cardColors(containerColor = Color(0xFFFFD700).copy(alpha = 0.2f))
                     ) {
                         Column(
-                            modifier = Modifier.fillMaxWidth().padding(20.dp),
+                            modifier = Modifier.fillMaxWidth().padding(24.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text("🎉", fontSize = 48.sp)
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("🎉", fontSize = 56.sp)
+                            Spacer(modifier = Modifier.height(12.dp))
                             Text(
                                 "Maximum Rank Achieved!",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
-                                color = rankColor
+                                color = rankColor,
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                    Text("Close")
+                }
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
@@ -765,19 +823,6 @@ fun PointEarnRow(action: String, points: String) {
     }
 }
 
-@Suppress("unused")
-@Composable
-fun FriendsOverlay(onDismiss: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)).clickable { onDismiss() }) {
-        Card(modifier = Modifier.align(Alignment.Center).padding(32.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-            Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("👥 Friends", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Coming Soon!", style = MaterialTheme.typography.bodyLarge)
-            }
-        }
-    }
-}
 
 @Composable
 fun HelpOverlay(onDismiss: () -> Unit) {
@@ -802,7 +847,7 @@ fun HelpOverlay(onDismiss: () -> Unit) {
 
                 HelpSection(
                     title = "How do Points work?",
-                    content = "Earn points by:\n• Exiting blocked apps (50 pts)\n• Maintaining streaks (10 pts/day)\n• Completing study sessions (5 pts)\n\nSpend points on Study Mode (50 pts)"
+                    content = "Earn points by:\n• Clean exit (stay away 10 min): 10 pts\n• Maintaining streaks: 10 pts/day\n• Completing study sessions: 5 pts\n\nSpend points on Study Mode (50 pts)"
                 )
 
                 HelpSection(
@@ -835,10 +880,8 @@ fun HelpSection(title: String, content: String) {
 }
 
 @Composable
-fun AchievementsOverlay(userStats: com.kamaluddin.shortstop.database.UserStatsEntity?, prefs: android.content.SharedPreferences, onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    val repository = remember { com.kamaluddin.shortstop.database.ShortStopRepository(context) }
-    val blockedAppsList by repository.blockedApps.collectAsState(initial = emptyList())
+fun AchievementsOverlay(userStats: com.kamaluddin.shortstop.database.UserStatsEntity, vm: ShortStopViewModel, onDismiss: () -> Unit) {
+    val blockedAppsList by vm.blockedApps.collectAsState(initial = emptyList())
     val achievements = getAchievements(userStats, blockedAppsList.size)
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)).clickable { onDismiss() }) {
@@ -869,10 +912,9 @@ fun AchievementItem(achievement: Achievement) {
 }
 
 @Composable
-fun SettingsOverlay(onDismiss: () -> Unit) {
+fun SettingsOverlay(vm: ShortStopViewModel, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { SecurePreferences.get(context) }
-    val repository = remember { com.kamaluddin.shortstop.database.ShortStopRepository(context) }
     val scope = rememberCoroutineScope()
     var showResetDialog by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
@@ -884,7 +926,7 @@ fun SettingsOverlay(onDismiss: () -> Unit) {
         scope.launch {
             try {
                 context.contentResolver.openOutputStream(uri)?.use { stream ->
-                    repository.exportData(stream)
+                    vm.exportData(stream)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -931,18 +973,12 @@ fun SettingsOverlay(onDismiss: () -> Unit) {
             confirmButton = {
                 Button(
                     onClick = {
-                        scope.launch {
-                            try {
-                                if (!SessionGuard.isAuthorized(context)) return@launch
-                                prefs.edit().clear().apply()
-                                val db = com.kamaluddin.shortstop.database.ShortStopDatabase.getDatabase(context)
-                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                    db.clearAllTables()
-                                }
-                                onDismiss()
-                            } catch (e: Exception) {
-                                AppLogger.e("ShortStop", "Reset failed")
-                            }
+                        vm.resetAllData(prefs) {
+                            // Restart the activity so all in-memory state (ViewModel, Flows, Service) is cleared
+                            val ctx = context
+                            val intent = android.content.Intent(ctx, MainActivity::class.java)
+                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                            ctx.startActivity(intent)
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
@@ -982,23 +1018,15 @@ fun SettingsOverlay(onDismiss: () -> Unit) {
     }
 }
 
-@Suppress("unused")
-@Composable
-fun StatItem(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = MaterialTheme.typography.bodyLarge)
-        Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-    }
-}
 
 data class Achievement(val icon: String, val name: String, val description: String, val unlocked: Boolean)
 
-fun getAchievements(userStats: com.kamaluddin.shortstop.database.UserStatsEntity?, blockedAppsCount: Int): List<Achievement> {
-    val interventions = userStats?.totalInterventions ?: 0
-    val studySessions = userStats?.successfulStudySessions ?: 0
-    val streak = userStats?.currentStreak ?: 0
-    val timeSaved = (userStats?.totalTimeSaved ?: 0L) / 60000
-    val totalPoints = userStats?.totalPointsEarned ?: 0
+fun getAchievements(userStats: com.kamaluddin.shortstop.database.UserStatsEntity, blockedAppsCount: Int): List<Achievement> {
+    val interventions = userStats.totalInterventions
+    val studySessions = userStats.successfulStudySessions
+    val streak = userStats.currentStreak
+    val timeSaved = userStats.totalTimeSaved / 60000
+    val totalPoints = userStats.totalPointsEarned
 
     return listOf(
         Achievement("🎯", "First Steps", "Complete your first intervention", interventions >= 1),
@@ -1017,68 +1045,51 @@ fun getAchievements(userStats: com.kamaluddin.shortstop.database.UserStatsEntity
         Achievement("💎", "Point Collector", "Earn 100 total points", totalPoints >= 100),
         Achievement("💰", "Wealthy Warrior", "Earn 500 total points", totalPoints >= 500),
         Achievement("🛡️", "App Blocker", "Block 5 or more apps", blockedAppsCount >= 5),
-        Achievement("⚔️", "Digital Warrior", "Reach 500 rank score", calculateRankScore(userStats) >= 500)
+        Achievement("⚔️", "Sentinel", "Reach 1500 rank score", calculateRankScore(userStats) >= 1500)
     )
 }
 
 
-@Suppress("unused")
-fun calculateStreak(prefs: android.content.SharedPreferences): Int {
-    val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
-    val lastDate = prefs.getString("last_intervention_date", "") ?: ""
-    val currentStreak = prefs.getInt("current_streak", 0)
-
-    if (lastDate.isEmpty()) return 0
-    if (lastDate == today) return currentStreak
-
-    val yesterday = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-        .format(java.util.Date(System.currentTimeMillis() - 24 * 60 * 60 * 1000L))
-
-    return if (lastDate == yesterday) currentStreak else 0
-}
-
 fun calculateRankScore(userStats: com.kamaluddin.shortstop.database.UserStatsEntity?): Int {
-    val streak = userStats?.currentStreak ?: 0
-    val interventions = userStats?.totalInterventions ?: 0
-    return (streak * 10) + (interventions * 2)
+    userStats ?: return 0
+    val streak = userStats.currentStreak
+    val studySessions = userStats.successfulStudySessions
+    val timeSavedMinutes = (userStats.totalTimeSaved / 60000).toInt()
+    val emergencyExits = userStats.totalEmergencyExits
+    return ((streak * 25) + (studySessions * 15) + (timeSavedMinutes / 5) - (emergencyExits * 20))
+        .coerceAtLeast(0)
 }
 
 fun getRankFromScore(score: Int): String {
     return when {
-        score < 0 -> "😔 Struggling Beginner"
-        score < 50 -> "🌱 Getting Started"
-        score < 150 -> "🔨 Building Habits"
-        score < 300 -> "🎯 Focused Learner"
-        score < 500 -> "🧘 Self-Control Master"
-        score < 750 -> "⚔️ Digital Warrior"
-        score < 1000 -> "🏆 Wellness Champion"
-        else -> "👑 Ultimate Controller"
+        score < 100  -> "🌱 Sprout"
+        score < 300  -> "🔨 Apprentice"
+        score < 750  -> "🎯 Focused"
+        score < 1500 -> "🧘 Monk"
+        score < 3000 -> "⚔️ Sentinel"
+        else         -> "👑 Sovereign"
     }
 }
 
 fun getNextRankThreshold(score: Int): Pair<String, Int> {
     return when {
-        score < 0 -> Pair("🌱 Getting Started", 0)
-        score < 50 -> Pair("🔨 Building Habits", 50)
-        score < 150 -> Pair("🎯 Focused Learner", 150)
-        score < 300 -> Pair("🧘 Self-Control Master", 300)
-        score < 500 -> Pair("⚔️ Digital Warrior", 500)
-        score < 750 -> Pair("🏆 Wellness Champion", 750)
-        score < 1000 -> Pair("👑 Ultimate Controller", 1000)
-        else -> Pair("", 0)
+        score < 100  -> Pair("🔨 Apprentice", 100)
+        score < 300  -> Pair("🎯 Focused", 300)
+        score < 750  -> Pair("🧘 Monk", 750)
+        score < 1500 -> Pair("⚔️ Sentinel", 1500)
+        score < 3000 -> Pair("👑 Sovereign", 3000)
+        else         -> Pair("", 0)
     }
 }
 
 fun getRankColor(score: Int): Color {
     return when {
-        score < 0 -> Color(0xFF9E9E9E)
-        score < 50 -> Color(0xFF8BC34A)
-        score < 150 -> Color(0xFF2196F3)
-        score < 300 -> Color(0xFF9C27B0)
-        score < 500 -> Color(0xFF009688)
-        score < 750 -> Color(0xFFFF9800)
-        score < 1000 -> Color(0xFFFFD700)
-        else -> Color(0xFF00FF00)
+        score < 100  -> Color(0xFF8BC34A)  // green   — Sprout
+        score < 300  -> Color(0xFF2196F3)  // blue    — Apprentice
+        score < 750  -> Color(0xFF9C27B0)  // purple  — Focused
+        score < 1500 -> Color(0xFF009688)  // teal    — Monk
+        score < 3000 -> Color(0xFFFF9800)  // orange  — Sentinel
+        else         -> Color(0xFFFFD700)  // gold    — Sovereign
     }
 }
 

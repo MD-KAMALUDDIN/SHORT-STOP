@@ -16,10 +16,10 @@ All data stays on your device. We have no servers, no analytics, no tracking.
 
 ## Information We Access
 
-### Accessibility Service
-ShortStop uses Android's Accessibility Service to:
-- Monitor which apps you are currently using
-- Display intervention overlays when you exceed time limits
+### Usage Stats Permission
+ShortStop uses Android's Usage Stats permission (`PACKAGE_USAGE_STATS`) to:
+- Detect which app is currently in the foreground
+- Trigger intervention overlays when you open a blocked app
 - Help you manage your digital wellness
 
 **Important**: This data is processed locally on your device only. We do NOT collect or transmit this information.
@@ -40,8 +40,8 @@ This data:
 ## Permissions We Use
 
 ### Required Permissions:
-- **Accessibility Service (ShortStopService)**: To monitor app usage and display interventions
-- **Display Over Other Apps**: To show intervention overlays
+- **Usage Stats (PACKAGE_USAGE_STATS)**: To detect which app is in the foreground and trigger interventions
+- **Display Over Other Apps (SYSTEM_ALERT_WINDOW)**: To show intervention overlays
 - **Foreground Service**: To keep the monitoring service running
 - **Boot Completed**: To restart monitoring after device reboot
 - **Battery Optimization**: To ensure reliable operation
@@ -112,26 +112,24 @@ Under CCPA, California residents have specific rights. Since ShortStop does not 
 - We do not share personal information with third parties
 - All data remains on your device
 
-## Accessibility Service Disclosure
+## Usage Stats Permission Disclosure
 
-**Service Name:** ShortStopService
-
-**Why We Use Accessibility Service:**
-ShortStop uses the Accessibility Service API (ShortStopService) to monitor which apps you're using and display intervention screens. This is the only way to implement app usage monitoring on Android.
+**Why We Use Usage Stats:**
+ShortStop uses Android's `PACKAGE_USAGE_STATS` permission to detect which app is currently in the foreground. This is required to trigger the 30-second intervention overlay when you open a blocked app.
 
 **What We Monitor:**
-- Current foreground app package name
-- App switch events
+- Current foreground app package name only
+- App switch events (which app you switched to)
 
 **What We DON'T Monitor:**
 - Content within apps
 - Text you type
 - Passwords or sensitive information
-- Your browsing history details
+- Your browsing history
 - Messages or communications
 
 **Data Handling:**
-All monitoring data is processed in real-time on your device and is NOT stored permanently or transmitted anywhere.
+All monitoring is processed in real-time on your device and is NOT stored permanently or transmitted anywhere.
 
 ## Contact Us
 

@@ -109,8 +109,8 @@ All features unlocked from day one. We believe digital wellness should be access
 6. Use the pause to reflect and make a conscious choice
 
 🛠️ TECHNICAL DETAILS:
-• Minimum Android 7.0 (API 24)
-• Uses Accessibility Service for app monitoring
+• Minimum Android 8.0 (API 26)
+• Uses Usage Stats permission for app monitoring
 • Requires overlay permission for interventions
 • All processing happens locally on your device
 • No internet connection needed
