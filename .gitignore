@@ -1,22 +1,44 @@
-# Gradle
+# ── Gradle ───────────────────────────────────────────────────────────────────
 .gradle/
 build/
 **/build/
+app/build/
 
-# Local config
+# ── Build artifacts ───────────────────────────────────────────────────────────
+*.apk
+*.aab
+*.ap_
+
+# ── Local config (contains SDK path — never commit) ──────────────────────────
 local.properties
-*.hprof
 
-# Android Studio / IntelliJ
+# ── Keystore & signing credentials (NEVER upload) ────────────────────────────
+*.jks
+*.keystore
+key.properties
+keystore.properties
+
+# ── Secrets (future-proof) ────────────────────────────────────────────────────
+google-services.json
+secrets.xml
+*.secret
+*.secrets
+
+# ── Android Studio / IntelliJ ─────────────────────────────────────────────────
 .idea/
 *.iml
 *.iws
 *.ipr
+captures/
+.externalNativeBuild/
+.cxx/
 
-# Keystore
-*.jks
-*.keystore
+# ── Memory & profiling dumps ──────────────────────────────────────────────────
+*.hprof
 
-# OS
+# ── OS generated ─────────────────────────────────────────────────────────────
 .DS_Store
+.DS_Store?
 Thumbs.db
+ehthumbs.db
+Desktop.ini

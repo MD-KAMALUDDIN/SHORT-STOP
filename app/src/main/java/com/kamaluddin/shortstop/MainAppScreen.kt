@@ -929,7 +929,7 @@ fun SettingsOverlay(vm: ShortStopViewModel, onDismiss: () -> Unit) {
                     vm.exportData(stream)
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                AppLogger.e("ShortStop", "Export failed", e)
             }
         }
     }
