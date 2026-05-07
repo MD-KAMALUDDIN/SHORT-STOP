@@ -1,6 +1,6 @@
 # Privacy Policy for ShortStop
 
-**Last Updated: March 2026**
+**Last Updated: May 2026**
 
 ## Introduction
 
