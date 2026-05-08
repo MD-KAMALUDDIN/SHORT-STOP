@@ -430,3 +430,4 @@ MIT License — Free to use, modify, and distribute.
 ---
 
 **Built with ❤️ for digital wellbeing**
+
